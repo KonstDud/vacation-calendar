@@ -90,41 +90,47 @@ const restoreContent = async () => {
   const usersData = await loadFromFirestore();
   if (!usersData) return;
 
-  // Восстанавливаем пользователей из данных
+  // Временный массив для созданных пользователей
+  const createdUsers = [];
+
+  // 1. Создаём всех пользователей (без отпусков)
   usersData.forEach(userData => {
-    // Создаём пользователя
     const addUserEvent = { target: document.querySelector('.form__button_type_user-add') };
     hideAllUsers(addUserEvent);
-
-    // Вызываем addUser (она добавит пользователя в DOM)
     addUser(addUserEvent);
 
-    // Находим только что созданного пользователя (последний в списке)
     const allUsers = form.querySelectorAll('.form__user');
     const newUser = allUsers[allUsers.length - 1];
 
-    // Настраиваем пользователя
     newUser.id = userData.id;
     newUser.querySelector('.form__username').textContent = userData.name;
     newUser.querySelector('.form__color').value = userData.color;
 
-    if (userData.isHidden) {
-      hideUser(newUser, newUser.querySelector('.form__color'));
-    }
+    createdUsers.push({
+      element: newUser,
+      isHidden: userData.isHidden,
+      vacations: userData.vacations
+    });
+  });
 
-    // Восстанавливаем отпуски
-    userData.vacations.forEach(vacData => {
-      const addVacBtn = newUser.querySelector('.form__button_type_vac-add');
+  // 2. Восстанавливаем отпуски для каждого пользователя
+  createdUsers.forEach(user => {
+    user.vacations.forEach(vacData => {
+      const addVacBtn = user.element.querySelector('.form__button_type_vac-add');
       addVacBtn.click();
-      const vacDiv = newUser.querySelector('.form__vacation:last-child');
+      const vacDiv = user.element.querySelector('.form__vacation:last-child');
       vacDiv.id = vacData.id;
       vacDiv.querySelector('.form__date_type_start').value = vacData.startDate;
       vacDiv.querySelector('.form__date_type_end').value = vacData.endDate;
 
-      // Применяем отпуск (рисуем на календаре)
       const applyBtn = vacDiv.querySelector('.form__button_type_vac-apply');
       applyBtn.click();
     });
+
+    // 3. Применяем свёртывание ПОСЛЕ создания отпусков
+    if (user.isHidden) {
+      hideUser(user.element, user.element.querySelector('.form__color'));
+    }
   });
 
   // Восстанавливаем ID‑счётчики
