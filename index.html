@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="./vendor/normalize.css" />
+  <link rel="stylesheet" href="./style.css" />
+  <title>График отпусков 2026</title>
+</head>
+
+<body class="page">
+  <header class="header">
+    <h1 class="header__title">График отпусков 2026</h1>
+  </header>
+
+  <main class="content">
+    <!-- Левая панель: пользователи и кнопки -->
+    <section class="content-side">
+      <form class="form"></form>
+      <input type="button" class="form__button form__button_type_user-add" value="Добавить пользователя" />
+      <input type="button" class="form__button form__button_type_reset" value="Сброс" />
+    </section>
+
+    <!-- Правая панель: календарь -->
+    <section class="content-main">
+      <div class="calendar"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p class="footer__copyright">K. 2026</p>
+    <a class="footer__link" href="https://github.com/Segodnya/vacation-calendar" target="_blank"
+      rel="noopener noreferrer">Github</a>
+  </footer>
+
+  <!-- Всплывающее окно -->
+  <div class="popup">
+    <div class="popup__container" id="popup__container">
+      <h2 class="popup__title">Дата</h2>
+      <div class="popup__content"></div>
+      <button type="button" class="popup__close-button" aria-label="Кнопка закрытия всплывающего окна"></button>
+    </div>
+  </div>
+
+  <!-- Шаблон пользователя -->
+  <template id="template-user">
+    <div class="form__user">
+      <h2 class="form__username" maxlength="30">Пользователь</h2>
+      <button type="button" class="form__button form__button_type_user-edit">Изменить имя</button>
+      <input type="color" class="form__button form__color" />
+      <button type="button" class="form__button form__button_type_user-hide">Свернуть</button>
+      <button type="button" class="form__button form__button_type_user-del">X</button>
+      <button type="button" class="form__button form__button_type_vac-add">Добавить отпуск</button>
+    </div>
+  </template>
+
+  <!-- Шаблон отпуска -->
+  <template id="template-vacation">
+    <div class="form__vacation">
+      <span class="form__caption">Начало отпуска</span>
+      <input type="date" name="date-start" class="form__date form__date_type_start" required />
+      <span class="form__error date-start-input-error"></span>
+
+      <span class="form__caption">Окончание отпуска</span>
+      <input type="date" name="date-end" class="form__date form__date_type_end" required />
+      <span class="form__error date-end-input-error"></span>
+
+      <button type="button" class="form__button form__button_type_vac-apply">Показать</button>
+      <button type="button" class="form__button form__button_type_vac-del">Удалить</button>
+    </div>
+  </template>
+
+  <!-- Скрипты -->
+  <script src="./scripts/calendar.js" defer></script>
+  <script src="./scripts/vacations.js" defer></script>
+  <script src="./scripts/form.js" defer></script>
+  <script src="./scripts/validate.js" defer></script>
+  <script src="./scripts/popup.js" defer></script>
+  <script src="./scripts/restore.js" defer></script>
+  <script type="module" src="./firebase-config.js"></script>
+</body>
+
+</html>
