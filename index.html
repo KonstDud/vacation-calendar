@@ -11,6 +11,12 @@
 </head>
 
 <body class="page">
+  <script>
+    if (!sessionStorage.getItem('vacationAuth')) {
+      window.location.href = 'login.html';
+    }
+  </script>
+
   <header class="header">
     <h1 class="header__title">График отпусков 2026</h1>
   </header>
@@ -21,6 +27,7 @@
       <form class="form"></form>
       <input type="button" class="form__button form__button_type_user-add" value="Добавить пользователя" />
       <input type="button" class="form__button form__button_type_reset" value="Сброс" />
+      <input type="button" class="form__button form__button_type_logout" value="Выйти" />
     </section>
 
     <!-- Правая панель: календарь -->
@@ -80,6 +87,16 @@
   <script src="./scripts/popup.js" defer></script>
   <script src="./scripts/restore.js" defer></script>
   <script type="module" src="./firebase-config.js"></script>
+
+  <script>
+    const btnLogout = document.querySelector('.form__button_type_logout');
+    if (btnLogout) {
+      btnLogout.addEventListener('click', () => {
+        sessionStorage.removeItem('vacationAuth');
+        window.location.href = 'login.html';
+      });
+    }
+  </script>
 </body>
 
 </html>

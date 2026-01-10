@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в График отпусков</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f0f0f0;
+        }
+
+        .login-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        h1 {
+            margin: 0 0 1rem;
+            text-align: center;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <h1>Вход в График отпусков</h1>
+        <p>Введите общий пароль для команды:</p>
+        <input type="password" id="passwordInput" placeholder="Пароль">
+        <button id="loginButton">Войти</button>
+        <div class="error" id="errorText">Неверный пароль</div>
+    </div>
+
+    <script>
+        // Пароль для команды (можно поменять)
+        const CORRECT_PASSWORD = 'vacation2026';
+
+        document.getElementById('loginButton').addEventListener('click', () => {
+            const entered = document.getElementById('passwordInput').value;
+            if (entered === CORRECT_PASSWORD) {
+                // Сохраняем флаг в sessionStorage (исчезнет после закрытия вкладки)
+                sessionStorage.setItem('vacationAuth', 'true');
+                // Переходим к основному приложению
+                window.location.href = 'index.html';
+            } else {
+                document.getElementById('errorText').style.display = 'block';
+            }
+        });
+
+        // Можно войти по Enter
+        document.getElementById('passwordInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('loginButton').click();
+            }
+        });
+    </script>
+</body>
+
+</html>
