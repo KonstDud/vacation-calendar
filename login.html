@@ -71,24 +71,57 @@
         <div class="error" id="errorText">Неверный пароль</div>
     </div>
 
-    <script>
-        // Пароль для команды (можно поменять)
-        const CORRECT_PASSWORD = 'vacation2026';
+    <!-- Подключаем Firebase -->
+    <script type="module" src="./firebase-config.js"></script>
 
-        document.getElementById('loginButton').addEventListener('click', () => {
+    <script>
+        // Загружаем хеш пароля из Firebase
+        async function getPasswordHash() {
+            try {
+                const docRef = window.firestore.doc(window.db, 'auth', 'password');
+                const docSnap = await window.firestore.getDoc(docRef);
+                if (docSnap.exists()) {
+                    return docSnap.data().hash;
+                }
+                return null;
+            } catch (error) {
+                console.error('Ошибка загрузки хеша:', error);
+                return null;
+            }
+        }
+
+        // Проверка пароля
+        async function checkPassword(enteredPassword) {
+            const correctHash = await getPasswordHash();
+            if (!correctHash) {
+                alert('Ошибка загрузки данных авторизации');
+                return false;
+            }
+
+            // Хешируем введённый пароль и сравниваем
+            const encoder = new TextEncoder();
+            const data = encoder.encode(enteredPassword);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const enteredHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+            return enteredHash === correctHash;
+        }
+
+        document.getElementById('loginButton').addEventListener('click', async () => {
             const entered = document.getElementById('passwordInput').value;
-            if (entered === CORRECT_PASSWORD) {
-                // Сохраняем флаг в sessionStorage (исчезнет после закрытия вкладки)
+            const isValid = await checkPassword(entered);
+
+            if (isValid) {
                 sessionStorage.setItem('vacationAuth', 'true');
-                // Переходим к основному приложению
                 window.location.href = 'index.html';
             } else {
                 document.getElementById('errorText').style.display = 'block';
             }
         });
 
-        // Можно войти по Enter
-        document.getElementById('passwordInput').addEventListener('keypress', (e) => {
+        // Вход по Enter
+        document.getElementById('passwordInput').addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
                 document.getElementById('loginButton').click();
             }
