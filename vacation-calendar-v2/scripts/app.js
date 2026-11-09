@@ -1,4 +1,4 @@
-// scripts/app.js — v2 (С фиксом сортировки при вводе)
+// scripts/app.js — v2 (Без автосортировки, стабильная версия)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -143,21 +143,19 @@ const vacationTemplate = (user, vac) => {
         <div class="form__vacation ${hasError ? 'form__vacation_overlap' : ''}">
             <div class="form__vacation-dates">
                 <input type="date" class="form__date" .value=${vac.startDate} 
-                    @input=${(e) => {
+                    @change=${(e) => {
             vac.startDate = e.target.value;
             scheduleSave(user.id, user);
             updateCalendarVacations();
         }} 
-                    @blur=${() => requestRender()} 
                 />
                 <span class="form__date-sep">—</span>
                 <input type="date" class="form__date" .value=${vac.endDate} 
-                    @input=${(e) => {
+                    @change=${(e) => {
             vac.endDate = e.target.value;
             scheduleSave(user.id, user);
             updateCalendarVacations();
         }} 
-                    @blur=${() => requestRender()} 
                 />
             </div>
             <div class="form__vacation-info">
@@ -203,14 +201,8 @@ const userTemplate = (user) => {
     const isVisible = user.isVisible !== false;
     const isHidden = user.isHidden === true;
 
-    // СОРТИРОВКА ОТПУСКОВ ПО ДАТЕ (только если обе даты заполнены)
-    const sortedVacations = (user.vacations || []).slice().sort((a, b) => {
-        // Если у одного из них нет дат, оставляем их в конце
-        if (!a.startDate || !a.endDate) return 1;
-        if (!b.startDate || !b.endDate) return -1;
-        // Иначе сравниваем
-        return a.startDate.localeCompare(b.startDate);
-    });
+    // Никакой сортировки — как есть
+    const displayVacations = user.vacations || [];
 
     return html`
     <div class="form__user ${isHidden ? 'form__user_hidden' : ''}" id="${user.id}" style="${isHidden ? `border-left-color: ${user.color};` : ''}">
@@ -257,7 +249,7 @@ const userTemplate = (user) => {
         
         ${!isHidden ? html`
             <div class="form__vacations-list">
-                ${sortedVacations.map(vac => vacationTemplate(user, vac))}
+                ${displayVacations.map(vac => vacationTemplate(user, vac))}
                 <button type="button" class="btn btn_small" 
                     @click=${() => {
                 if (!user.vacations) user.vacations = [];
@@ -283,8 +275,6 @@ const usersContainer = document.getElementById('users-container');
 function requestRender() {
     render(usersListTemplate(), usersContainer);
     updateCalendarVacations();
-
-    // После рендера нужно переинициализировать Sortable
     initSortable();
 }
 
