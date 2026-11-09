@@ -90,6 +90,13 @@ const restoreContent = async () => {
   const usersData = await loadFromFirestore();
   if (!usersData) return;
 
+  // Ждём, пока календарь полностью отрисуется в DOM (защита от гонки данных)
+  let attempts = 0;
+  while (document.querySelectorAll('.calendar__day[id^="dayid"]').length === 0 && attempts < 20) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    attempts++;
+  }
+
   // Временный массив для созданных пользователей
   const createdUsers = [];
 
@@ -113,9 +120,9 @@ const restoreContent = async () => {
     });
   });
 
-  // 2. Восстанавливаем отпуски для каждого пользователя
-  createdUsers.forEach(user => {
-    user.vacations.forEach(vacData => {
+  // 2. Восстанавливаем отпуски для каждого пользователя с небольшой паузой для рендеринга
+  for (const user of createdUsers) {
+    for (const vacData of user.vacations) {
       const addVacBtn = user.element.querySelector('.form__button_type_vac-add');
       addVacBtn.click();
       const vacDiv = user.element.querySelector('.form__vacation:last-child');
@@ -125,13 +132,16 @@ const restoreContent = async () => {
 
       const applyBtn = vacDiv.querySelector('.form__button_type_vac-apply');
       applyBtn.click();
-    });
+
+      // Даем браузеру отрисовать точку перед следующим действием
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
 
     // 3. Применяем свёртывание ПОСЛЕ создания отпусков
     if (user.isHidden) {
       hideUser(user.element, user.element.querySelector('.form__color'));
     }
-  });
+  }
 
   // Восстанавливаем ID‑счётчики
   currentUserId = Math.max(...usersData.map(u => parseInt(u.id.replace('userid_', ''))), 0) + 1;
