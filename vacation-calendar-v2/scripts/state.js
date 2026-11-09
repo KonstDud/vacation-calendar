@@ -29,7 +29,6 @@ function emitChange() {
 }
 
 function usersCollection(year) {
-    // Убрали orderBy, чтобы не падало из-за старых записей
     return window.firestore.collection(window.db, "vacationData_v2", String(year), "users");
 }
 
@@ -75,12 +74,10 @@ async function startSubscription(year) {
         const users = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            // Если у старого юзера нет order, ставим 0 (он будет первым)
             if (!data.order) data.order = 0;
             users.push({ id: doc.id, ...data });
         });
 
-        // Локальная сортировка по order
         users.sort((a, b) => a.order - b.order);
 
         applyRemoteUsers(users);
@@ -109,4 +106,15 @@ export async function setYear(newYear) {
     url.searchParams.set("year", String(newYear));
     window.history.pushState({}, "", url);
     await startSubscription(newYear);
+}
+
+// Функция для получения списка доступных лет
+export function getAvailableYears() {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    // Добавляем текущий год +- 2 года (например, 2024, 2025, 2026, 2027, 2028)
+    for (let y = currentYear - 2; y <= currentYear + 3; y++) {
+        years.push(y);
+    }
+    return years;
 }

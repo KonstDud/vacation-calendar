@@ -1,6 +1,6 @@
-// scripts/app.js — v2
+// scripts/app.js — v2 (С Drag-and-Drop и выбором года)
 
-import { state, initState, stateEvents } from './state.js';
+import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
 import { initCalendarInteractions } from './calendar-interactions.js';
 import { html, render } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/lit-html.js';
@@ -82,7 +82,7 @@ const getExternalOverlaps = (currentUser, currentVac) => {
 
         (otherUser.vacations || []).forEach(otherVac => {
             if (!otherVac.startDate || !otherVac.endDate) return;
-            
+
             const oStart = parseInt(otherVac.startDate.replace(/-/g, ''), 10);
             const oEnd = parseInt(otherVac.endDate.replace(/-/g, ''), 10);
 
@@ -132,7 +132,7 @@ const iconWarning = html`
 const vacationTemplate = (user, vac) => {
     const calDays = getCalendarDays(vac.startDate, vac.endDate);
     const workDays = getWorkingDays(vac.startDate, vac.endDate);
-    
+
     const { isOverlap, isInvalid } = validateInternalOverlap(user, vac.id);
     const externalOverlaps = getExternalOverlaps(user, vac);
 
@@ -143,20 +143,20 @@ const vacationTemplate = (user, vac) => {
         <div class="form__vacation ${hasError ? 'form__vacation_overlap' : ''}">
             <div class="form__vacation-dates">
                 <input type="date" class="form__date" .value=${vac.startDate} 
-                    @input=${(e) => { 
-                        vac.startDate = e.target.value; 
-                        scheduleSave(user.id, user); 
-                        updateCalendarVacations(); 
-                    }} 
+                    @input=${(e) => {
+            vac.startDate = e.target.value;
+            scheduleSave(user.id, user);
+            updateCalendarVacations();
+        }} 
                     @blur=${() => requestRender()} 
                 />
                 <span class="form__date-sep">—</span>
                 <input type="date" class="form__date" .value=${vac.endDate} 
-                    @input=${(e) => { 
-                        vac.endDate = e.target.value; 
-                        scheduleSave(user.id, user); 
-                        updateCalendarVacations(); 
-                    }} 
+                    @input=${(e) => {
+            vac.endDate = e.target.value;
+            scheduleSave(user.id, user);
+            updateCalendarVacations();
+        }} 
                     @blur=${() => requestRender()} 
                 />
             </div>
@@ -164,10 +164,10 @@ const vacationTemplate = (user, vac) => {
                 <span>${calDays} кал. / ${workDays} раб.</span>
                 <button type="button" class="btn_icon delete" title="Удалить отпуск"
                     @click=${() => {
-                        user.vacations = user.vacations.filter(v => v.id !== vac.id);
-                        scheduleSave(user.id, user);
-                        requestRender();
-                    }}>✕</button>
+            user.vacations = user.vacations.filter(v => v.id !== vac.id);
+            scheduleSave(user.id, user);
+            requestRender();
+        }}>✕</button>
             </div>
             
             ${isInvalid ? html`
@@ -200,7 +200,7 @@ const vacationTemplate = (user, vac) => {
 };
 
 const userTemplate = (user) => {
-    const isVisible = user.isVisible !== false; 
+    const isVisible = user.isVisible !== false;
     const isHidden = user.isHidden === true;
 
     return html`
@@ -218,12 +218,15 @@ const userTemplate = (user) => {
             
             <div class="form__username-wrapper">
                 <h2 class="form__username" @click=${() => {
-                    // Теперь переименование работает всегда
-                    const newName = prompt('Введите новое имя:', user.name);
-                    if (newName) { user.name = newName; scheduleSave(user.id, user); requestRender(); }
-                }}>${user.name}</h2>
+            if (!isHidden) {
+                const newName = prompt('Введите новое имя:', user.name);
+                if (newName) { user.name = newName; scheduleSave(user.id, user); requestRender(); }
+            }
+        }}>${user.name}</h2>
                 
-                <div class="form__username-tooltip">${user.name}</div>
+                ${!isHidden ? html`
+                    <div class="form__username-tooltip">${user.name}</div>
+                ` : ''}
             </div>
             
             <div class="form__user-actions">
@@ -234,12 +237,12 @@ const userTemplate = (user) => {
                 
                 <button type="button" class="btn_icon delete" title="Удалить"
                     @click=${() => {
-                        if (confirm(`Удалить ${user.name}?`)) {
-                            state.users = state.users.filter(u => u.id !== user.id);
-                            window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
-                            requestRender();
-                        }
-                    }}>✕</button>
+            if (confirm(`Удалить ${user.name}?`)) {
+                state.users = state.users.filter(u => u.id !== user.id);
+                window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
+                requestRender();
+            }
+        }}>✕</button>
             </div>
         </div>
         
@@ -248,11 +251,11 @@ const userTemplate = (user) => {
                 ${(user.vacations || []).map(vac => vacationTemplate(user, vac))}
                 <button type="button" class="btn btn_small" 
                     @click=${() => {
-                        if (!user.vacations) user.vacations = [];
-                        user.vacations.push({ id: `vacationid_${Date.now()}`, startDate: `${state.year}-01-01`, endDate: `${state.year}-01-01` });
-                        scheduleSave(user.id, user);
-                        requestRender();
-                    }}>+ Добавить отпуск</button>
+                if (!user.vacations) user.vacations = [];
+                user.vacations.push({ id: `vacationid_${Date.now()}`, startDate: `${state.year}-01-01`, endDate: `${state.year}-01-01` });
+                scheduleSave(user.id, user);
+                requestRender();
+            }}>+ Добавить отпуск</button>
             </div>
         ` : ''}
     </div>
@@ -271,12 +274,15 @@ const usersContainer = document.getElementById('users-container');
 function requestRender() {
     render(usersListTemplate(), usersContainer);
     updateCalendarVacations();
+
+    // После рендера нужно переинициализировать Sortable
+    initSortable();
 }
 
 function updateCalendarVacations() {
     document.querySelectorAll('.calendar__span, .calendar__tooltip').forEach(el => el.remove());
-    
-    const dayData = {}; 
+
+    const dayData = {};
 
     state.users.forEach(user => {
         if (user.isVisible === false) return;
@@ -304,14 +310,14 @@ function updateCalendarVacations() {
             const span = document.createElement('span');
             span.classList.add('calendar__span');
             span.style.backgroundColor = person.color;
-            span.style.left = `${20 + (idx % 4) * 20}%`; 
+            span.style.left = `${20 + (idx % 4) * 20}%`;
             if (idx >= 4) span.style.bottom = '10px';
             dayDiv.appendChild(span);
         });
 
         const tooltip = document.createElement('div');
         tooltip.classList.add('calendar__tooltip');
-        
+
         dayData[dayIndex].forEach(person => {
             const item = document.createElement('div');
             item.classList.add('calendar__tooltip-item');
@@ -328,14 +334,57 @@ function updateCalendarVacations() {
     });
 }
 
+// --- Sortable (Drag and Drop) ---
+
+let sortableInstance = null;
+
+function initSortable() {
+    const form = document.querySelector('.form');
+    if (!form) return;
+
+    if (sortableInstance) {
+        sortableInstance.destroy();
+    }
+
+    sortableInstance = new Sortable(form, {
+        animation: 150,
+        handle: '.form__user-header',
+        ghostClass: 'form__user-sortable-ghost',
+        onEnd: async function (evt) {
+            const newOrderIds = Array.from(form.children).map(el => el.id);
+            const newUsers = [];
+            newOrderIds.forEach(id => {
+                const user = state.users.find(u => u.id === id);
+                if (user) newUsers.push(user);
+            });
+
+            newUsers.forEach((user, index) => {
+                if (user.order !== index) {
+                    user.order = index;
+                    const { id, ...dataToSave } = user;
+                    window.firestore.setDoc(getUserDoc(state.year, user.id), { order: index }, { merge: true }).catch(console.error);
+                }
+            });
+
+            state.users = newUsers;
+            requestRender();
+        }
+    });
+}
+
 // --- Инициализация ---
 
 stateEvents.addEventListener('statechange', () => {
-    document.getElementById('header-title').textContent = `График отпусков ${state.year}`;
-    document.getElementById('current-year-display').textContent = state.year;
-    
+    // Обновляем заголовок и бейдж года
+    document.getElementById('header-title').textContent = `График отпусков`;
+    document.getElementById('header-year').textContent = state.year;
+
+    // Обновляем селект года
+    const yearSelect = document.getElementById('year-select');
+    if (yearSelect) yearSelect.value = state.year;
+
     if (!document.querySelector('.calendar__month')) {
-         renderCalendar(state.year);
+        renderCalendar(state.year);
     }
     requestRender();
 });
@@ -345,17 +394,17 @@ window.addEventListener('calendarReady', () => updateCalendarVacations());
 document.getElementById('btn-add-user').addEventListener('click', () => {
     const colRef = getUsersCollection(state.year);
     const newDocRef = window.firestore.doc(colRef);
-    
-    const newUser = { 
-        id: newDocRef.id, 
-        name: 'Новый сотрудник', 
-        color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'), 
-        vacations: [], 
+
+    const newUser = {
+        id: newDocRef.id,
+        name: 'Новый сотрудник',
+        color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
+        vacations: [],
         order: Date.now(),
         isHidden: false,
-        isVisible: true 
+        isVisible: true
     };
-    
+
     state.users.push(newUser);
     requestRender();
     window.firestore.setDoc(newDocRef, newUser).catch(console.error);
@@ -374,6 +423,30 @@ document.getElementById('btn-logout').addEventListener('click', () => {
     sessionStorage.removeItem('vacationAuth');
     window.location.href = 'login.html';
 });
+
+// --- Заполнение селекта годов ---
+const yearSelect = document.getElementById('year-select');
+if (yearSelect) {
+    const years = getAvailableYears();
+    years.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+    });
+
+    yearSelect.value = state.year;
+
+    yearSelect.addEventListener('change', async (e) => {
+        const newYear = Number(e.target.value);
+        if (newYear !== state.year) {
+            await setYear(newYear);
+            document.getElementById('calendar-container').innerHTML = '';
+            renderCalendar(newYear);
+            requestRender();
+        }
+    });
+}
 
 initCalendarInteractions();
 initState();

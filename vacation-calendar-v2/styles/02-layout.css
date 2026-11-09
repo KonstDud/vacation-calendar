@@ -42,52 +42,104 @@
     height: 24px;
 }
 
+/* Обертка для заголовка и года */
+.header__titles {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .header__title {
     margin: 0;
     font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
+    /* Увеличили */
+    font-weight: 500;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
     white-space: nowrap;
+}
+
+/* Бейдж с годом */
+.header__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 8px;
+    font-size: 14px;
+    /* Увеличили */
+    font-weight: 600;
+    letter-spacing: 0.02em;
 }
 
 .header__actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
 
-.today-badge {
-    background: var(--bg-input);
-    color: var(--text-primary);
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
+/* Выпадающий список года */
+.year-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--bg-input);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
     border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px 36px 8px 16px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 15px;
+    /* Увеличили */
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    outline: none;
 }
 
-.today-badge__label {
-    color: var(--text-muted);
-    font-weight: 400;
+.year-select:hover {
+    background-color: var(--bg-hover);
+    border-color: #444;
 }
 
+.year-select:focus {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.year-select option {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+}
+
+/* Кнопка Выйти */
 .btn_logout {
     background: transparent;
     color: var(--text-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 6px 14px;
-    font-size: 13px;
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 15px;
+    /* Увеличили */
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
     transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .btn_logout:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+    border-color: #444;
 }
 
 /* --- Сетка контента --- */

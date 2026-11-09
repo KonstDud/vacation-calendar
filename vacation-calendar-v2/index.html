@@ -23,7 +23,6 @@
         <header class="header">
             <div class="header__brand">
                 <div class="header__logo">
-                    <!-- Иконка Phosphor Duotone -->
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 256 256">
                         <rect width="256" height="256" fill="none" />
                         <rect x="32" y="48" width="192" height="160" rx="8" opacity="0.2" fill="#ffffff" />
@@ -40,14 +39,14 @@
                         <path d="M80,184a24,24,0,1,1-24-24A24,24,0,0,1,80,184Z" opacity="0.2" fill="#ffffff" />
                     </svg>
                 </div>
-                <h1 class="header__title" id="header-title">График отпусков</h1>
+                <div class="header__titles">
+                    <h1 class="header__title" id="header-title">График отпусков</h1>
+                    <span class="header__badge" id="header-year">2027</span>
+                </div>
             </div>
 
             <div class="header__actions">
-                <span class="today-badge">
-                    <span class="today-badge__label">Год:</span>
-                    <span id="current-year-display">2026</span>
-                </span>
+                <select id="year-select" class="year-select"></select>
                 <button type="button" class="btn btn_logout" id="btn-logout">Выйти</button>
             </div>
         </header>
@@ -58,7 +57,9 @@
                     <h2 class="side-title">Сотрудники</h2>
                     <button type="button" class="btn btn_add" id="btn-add-user">+ Добавить</button>
                 </div>
+
                 <div id="users-container"></div>
+
                 <div class="side-footer">
                     <button type="button" class="btn_link" id="btn-reset">Сбросить всё</button>
                 </div>
@@ -77,6 +78,8 @@
             <button type="button" class="popup__close-button" aria-label="Закрыть"></button>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
     <script type="module" src="./firebase-config.js"></script>
     <script type="module" src="./scripts/app.js"></script>

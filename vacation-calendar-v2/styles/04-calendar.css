@@ -7,6 +7,8 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
+    align-items: stretch;
+    /* Растягиваем карточки на одну высоту */
 }
 
 @media (max-width: 1200px) {
@@ -21,12 +23,15 @@
     }
 }
 
+/* Карточка месяца */
 .calendar__month {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 14px;
     box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
 }
 
 .calendar__month:hover {
@@ -43,18 +48,26 @@
     border-bottom: 1px solid var(--border-color);
 }
 
+/* Сетка дней */
 .calendar__area {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 4px;
+    align-content: start;
+    /* Прижимаем строки к верху */
+    flex: 1;
+    /* Чтобы сетка занимала доступное место */
 }
 
+/* Квадратные дни */
 .calendar__day {
     aspect-ratio: 1;
+    /* Квадрат! */
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 15px;
+    /* Вернули нормальный шрифт */
     font-weight: 500;
     color: var(--text-secondary);
     border-radius: 6px;
@@ -62,16 +75,17 @@
     user-select: none;
 }
 
+/* Пустые дни (сдвиг) — прозрачные */
 .calendar__day:empty {
     background: transparent;
     pointer-events: none;
 }
 
+/* Кликабельные дни */
 .calendar__day[id^="dayid"] {
     cursor: pointer;
     background: var(--bg-card);
     transition: all 0.15s ease;
-    padding-bottom: 12px;
 }
 
 .calendar__day[id^="dayid"]:hover {
@@ -86,23 +100,12 @@
     background: rgba(239, 68, 68, 0.05);
 }
 
-/* Выделение диапазона */
-.calendar__day.selected {
-    background: rgba(59, 130, 246, 0.2);
-    border: 1px solid var(--accent-blue);
-    color: var(--text-primary);
-}
-
-.calendar__day.selected:hover {
-    background: rgba(59, 130, 246, 0.4);
-}
-
 /* Точки отпусков */
 .calendar__span {
     position: absolute;
     bottom: 4px;
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     display: inline-block;
 }
