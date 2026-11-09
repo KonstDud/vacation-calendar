@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в График отпусков</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f0f0f0;
+        }
+
+        .login-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        h1 {
+            margin: 0 0 1rem;
+            text-align: center;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <h1>Вход в График отпусков</h1>
+        <p>Введите общий пароль для команды:</p>
+        <input type="password" id="passwordInput" placeholder="Пароль">
+        <button id="loginButton">Войти</button>
+        <div class="error" id="errorText">Неверный пароль</div>
+    </div>
+
+    <!-- Подключаем Firebase -->
+    <script type="module" src="./firebase-config.js"></script>
+
+    <script>
+        // Загружаем хеш пароля из Firebase
+        async function getPasswordHash() {
+            try {
+                const docRef = window.firestore.doc(window.db, 'auth', 'password');
+                const docSnap = await window.firestore.getDoc(docRef);
+                if (docSnap.exists()) {
+                    return docSnap.data().hash;
+                }
+                return null;
+            } catch (error) {
+                console.error('Ошибка загрузки хеша:', error);
+                return null;
+            }
+        }
+
+        // Проверка пароля
+        async function checkPassword(enteredPassword) {
+            const correctHash = await getPasswordHash();
+            if (!correctHash) {
+                alert('Ошибка загрузки данных авторизации');
+                return false;
+            }
+
+            // Хешируем введённый пароль и сравниваем
+            const encoder = new TextEncoder();
+            const data = encoder.encode(enteredPassword);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const enteredHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+            return enteredHash === correctHash;
+        }
+
+        document.getElementById('loginButton').addEventListener('click', async () => {
+            const entered = document.getElementById('passwordInput').value;
+            const isValid = await checkPassword(entered);
+
+            if (isValid) {
+                sessionStorage.setItem('vacationAuth', 'true');
+                window.location.href = 'index.html';
+            } else {
+                document.getElementById('errorText').style.display = 'block';
+            }
+        });
+
+        // Вход по Enter
+        document.getElementById('passwordInput').addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('loginButton').click();
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,451 @@
+@import url(./vendor/fonts/fonts.css);
+
+/* automatic/manual light mode */
+:root,
+:root.light {
+  --color-text-primary: #333;
+  --color-text-secondary: #fff;
+  --color-text-dayoff: #c00;
+  --color-bg-primary: #ccc;
+  --color-bg-forms: #eee;
+  --color-border: #333;
+  --color-button-black: #333;
+  --color-button-red: #c00;
+  --color-button-green: #090;
+  --color-box-shadow: rgba(0, 0, 0, 0.2);
+}
+
+.page {
+  min-width: 320px;
+  max-width: 1280px;
+  margin: 0 auto;
+  font-family: "Roboto", Arial, sans-serif;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+.header__title {
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  font-weight: 900;
+  font-size: 36px;
+  line-height: 1.2;
+}
+
+.content {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+}
+
+@media screen and (max-width: 660px) {
+  .content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.content-side {
+  margin: 0 auto;
+}
+
+.calendar {
+  margin: 10px;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.calendar__month {
+  padding: 5px;
+  border-radius: 8px;
+  box-shadow: 0px 5px 10px var(--color-box-shadow);
+  background-color: var(--color-bg-forms);
+}
+
+.calendar__title {
+  margin: 0;
+  padding: 10px;
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.calendar__area {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  row-gap: 10px;
+  column-gap: 2px;
+}
+
+.calendar__day {
+  color: var(--color-text-primary);
+}
+
+.calendar__day_dayoff {
+  color: var(--color-text-dayoff);
+}
+
+/* To ignore empty divs without dates */
+.calendar__day[id^="dayid"] {
+  position: relative;
+  padding: 8px;
+  font-weight: 100;
+  font-size: 18px;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  scale: 1;
+  box-shadow: 0px 1px 2px var(--color-box-shadow);
+  transition: scale 0.3s ease-in, box-shadow 0.3s ease-in;
+  border-radius: 50%;
+}
+
+.calendar__day[id^="dayid"]:hover {
+  background-color: var(--color-bg-forms);
+  scale: 1.5;
+  box-shadow: 0px 5px 10px var(--color-box-shadow);
+}
+
+.calendar__span {
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  font-weight: 900;
+  font-size: 32px;
+}
+
+.form {
+  display: flex;
+  justify-content: center;
+  max-width: 320px;
+  padding: 20px 10px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.form__button {
+  margin: 0;
+  border-radius: 8px;
+  height: 25px;
+  min-width: 25px;
+  cursor: pointer;
+}
+
+.form__button_type_user-add {
+  display: flex;
+  margin: 10px auto;
+}
+
+.form__button_type_reset {
+  background-color: var(--color-button-red);
+  color: var(--color-text-secondary);
+  display: flex;
+  margin: 10px auto;
+}
+
+.form__user {
+  width: 280px;
+  min-height: 100px;
+  padding: 10px;
+  font-size: 14px;
+  border-radius: 8px;
+  background-color: var(--color-bg-forms);
+  box-shadow: 0px 5px 10px var(--color-box-shadow);
+  transition: all 0.5s ease-in;
+}
+
+.form__user_hidden {
+  cursor: pointer;
+  min-height: 34px;
+  height: 34px;
+}
+
+.form__user-total {
+  display: block;
+  margin: 0;
+  padding: 5px;
+  font-weight: 700;
+  font-size: 16px;
+  text-align: center;
+}
+
+.form__user-total-workdays {
+  display: block;
+  margin: 0;
+  padding: 5px;
+  font-weight: 700;
+  font-size: 16px;
+  text-align: center;
+}
+
+.form__username {
+  margin: 0;
+  padding: 10px;
+  display: block;
+  font-size: 14px;
+  width: calc(100% - 20px);
+}
+
+.form__button_type_user-edit {
+  display: inline;
+  background-color: var(--color-bg-forms);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-weight: 900;
+}
+
+.form__button_type_user-del {
+  display: inline;
+  background-color: var(--color-button-red);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-weight: 900;
+}
+
+.form__caption {
+  display: block;
+}
+
+.form__color {
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.form__button_type_vac-add {
+  display: inline;
+  margin: 10px auto 0;
+  background-color: var(--color-button-black);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-weight: 900;
+}
+
+.form__vacation {
+  margin: 10px auto;
+  padding: 5px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.form__date {
+  display: inline;
+  width: 120px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.form__date_type_error {
+  border-bottom: 1px solid #f00;
+}
+
+.form__button_type_vac-apply {
+  margin: 10px auto 0;
+  background-color: var(--color-button-green);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-weight: 900;
+}
+
+.form__button_type_vac-apply_disabled {
+  background-color: var(--color-bg-primary);
+  color: var(--color-bg-forms);
+  cursor: default;
+}
+
+.form__button_type_vac-del {
+  margin: 10px auto 0;
+  background-color: var(--color-button-red);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-weight: 900;
+}
+
+.form__vacation-period {
+  display: block;
+  padding: 10px 5px 0;
+}
+
+.form__vacation-period-working {
+  display: block;
+  padding: 5px;
+}
+
+.form__vacation-period-days {
+  display: inline-block;
+  margin: 0;
+}
+
+.form__vacation-period-days-working {
+  display: inline-block;
+  margin: 0;
+}
+
+.form__error {
+  display: block;
+  visibility: collapse;
+  min-height: 0;
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 15px;
+  color: #f00;
+  opacity: 0;
+  transition: all 0.3s ease-in;
+}
+
+.form__error_visible {
+  visibility: visible;
+  min-height: 30px;
+  opacity: 1;
+}
+
+.popup {
+  display: flex;
+  overflow: hidden;
+  height: 0;
+  opacity: 0;
+  transition: height 0ms 400ms, opacity 400ms 0ms;
+  margin: 0 auto;
+  position: fixed;
+  top: 0;
+  left: 0;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.popup_opened {
+  display: flex;
+  height: 100vh;
+  opacity: 1;
+  transition: height 0ms 0ms, opacity 600ms 0ms;
+}
+
+.popup__container {
+  position: relative;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-forms);
+  width: 280px;
+  box-shadow: 0 0 25px var(--color-box-shadow);
+  border-radius: 10px;
+  transition: 0.5s all;
+}
+
+.popup__title {
+  margin: 0 auto;
+  font-style: normal;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 22px;
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.popup__content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 30px 0;
+  margin: 0;
+}
+
+.popup__close-button {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  position: absolute;
+  display: block;
+  width: 20px;
+  height: 20px;
+  top: -32px;
+  right: 0;
+  background-image: url("./images/close-icon.svg");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  box-sizing: border-box;
+}
+
+.popup__user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.popup__color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.popup__name {
+  margin: 0;
+}
+
+.footer {
+  padding: 80px 0 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
+  gap: 30px;
+  font-style: normal;
+  font-size: 18px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+@media screen and (max-width: 420px) {
+  .footer {
+    font-size: 12px;
+  }
+}
+
+.footer__title {
+  display: block;
+  margin: 0;
+}
+
+.footer__link {
+  margin: 0;
+  text-decoration: none;
+  color: var(--color-text-primary);
+}
+
+.form__vacation_overlap {
+  border: 2px solid #ff0000 !important;
+  background-color: #ffeeee !important;
+}
+
+.form__vacation-alert {
+  color: #d00;
+  font-size: 14px;
+  padding: 5px;
+  margin-top: 5px;
+  border: 1px dashed #d00;
+  border-radius: 4px;
+  background-color: #ffeaea;
+}
+
+.form__vacation-cross-alert {
+  color: #e67e00;
+  font-size: 14px;
+  padding: 5px;
+  margin-top: 5px;
+  border: 1px dashed #e67e00;
+  border-radius: 4px;
+  background-color: #fff9e6;
+}
