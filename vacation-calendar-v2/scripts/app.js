@@ -1,4 +1,4 @@
-// scripts/app.js — v2 (С Drag-and-Drop и выбором года)
+// scripts/app.js — v2 (С сортировкой отпусков)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -203,6 +203,13 @@ const userTemplate = (user) => {
     const isVisible = user.isVisible !== false;
     const isHidden = user.isHidden === true;
 
+    // СОРТИРОВКА ОТПУСКОВ ПО ДАТЕ НАЧАЛА
+    const sortedVacations = (user.vacations || []).slice().sort((a, b) => {
+        if (!a.startDate) return 1;
+        if (!b.startDate) return -1;
+        return a.startDate.localeCompare(b.startDate);
+    });
+
     return html`
     <div class="form__user ${isHidden ? 'form__user_hidden' : ''}" id="${user.id}" style="${isHidden ? `border-left-color: ${user.color};` : ''}">
         <div class="form__user-header">
@@ -248,7 +255,7 @@ const userTemplate = (user) => {
         
         ${!isHidden ? html`
             <div class="form__vacations-list">
-                ${(user.vacations || []).map(vac => vacationTemplate(user, vac))}
+                ${sortedVacations.map(vac => vacationTemplate(user, vac))}
                 <button type="button" class="btn btn_small" 
                     @click=${() => {
                 if (!user.vacations) user.vacations = [];
@@ -375,11 +382,9 @@ function initSortable() {
 // --- Инициализация ---
 
 stateEvents.addEventListener('statechange', () => {
-    // Обновляем заголовок и бейдж года
     document.getElementById('header-title').textContent = `График отпусков`;
     document.getElementById('header-year').textContent = state.year;
 
-    // Обновляем селект года
     const yearSelect = document.getElementById('year-select');
     if (yearSelect) yearSelect.value = state.year;
 
