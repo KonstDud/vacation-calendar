@@ -1,4 +1,4 @@
-// scripts/app.js — v2 (С сортировкой отпусков)
+// scripts/app.js — v2 (С фиксом сортировки при вводе)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -203,10 +203,12 @@ const userTemplate = (user) => {
     const isVisible = user.isVisible !== false;
     const isHidden = user.isHidden === true;
 
-    // СОРТИРОВКА ОТПУСКОВ ПО ДАТЕ НАЧАЛА
+    // СОРТИРОВКА ОТПУСКОВ ПО ДАТЕ (только если обе даты заполнены)
     const sortedVacations = (user.vacations || []).slice().sort((a, b) => {
-        if (!a.startDate) return 1;
-        if (!b.startDate) return -1;
+        // Если у одного из них нет дат, оставляем их в конце
+        if (!a.startDate || !a.endDate) return 1;
+        if (!b.startDate || !b.endDate) return -1;
+        // Иначе сравниваем
         return a.startDate.localeCompare(b.startDate);
     });
 
