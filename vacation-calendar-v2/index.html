@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./vendor/normalize.css" />
+    <link rel="stylesheet" href="./style.css" />
+    <title>График отпусков</title>
+</head>
+
+<body class="page">
+    <script>
+        if (!sessionStorage.getItem('vacationAuth')) {
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <div class="container">
+        <header class="header">
+            <div class="header__brand">
+                <div class="header__logo">
+                    <!-- Иконка Phosphor Duotone -->
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 256 256">
+                        <rect width="256" height="256" fill="none" />
+                        <rect x="32" y="48" width="192" height="160" rx="8" opacity="0.2" fill="#ffffff" />
+                        <rect x="32" y="48" width="192" height="160" rx="8" fill="none" stroke="#ffffff"
+                            stroke-linecap="round" stroke-linejoin="round" stroke-width="16" />
+                        <line x1="176" y1="24" x2="176" y2="56" fill="none" stroke="#ffffff" stroke-linecap="round"
+                            stroke-linejoin="round" stroke-width="16" />
+                        <line x1="80" y1="24" x2="80" y2="56" fill="none" stroke="#ffffff" stroke-linecap="round"
+                            stroke-linejoin="round" stroke-width="16" />
+                        <line x1="32" y1="88" x2="224" y2="88" fill="none" stroke="#ffffff" stroke-linecap="round"
+                            stroke-linejoin="round" stroke-width="16" />
+                        <path d="M176,136a24,24,0,1,1-24-24A24,24,0,0,1,176,136Z" opacity="0.2" fill="#ffffff" />
+                        <path d="M128,136a24,24,0,1,1-24-24A24,24,0,0,1,128,136Z" opacity="0.2" fill="#ffffff" />
+                        <path d="M80,184a24,24,0,1,1-24-24A24,24,0,0,1,80,184Z" opacity="0.2" fill="#ffffff" />
+                    </svg>
+                </div>
+                <h1 class="header__title" id="header-title">График отпусков</h1>
+            </div>
+
+            <div class="header__actions">
+                <span class="today-badge">
+                    <span class="today-badge__label">Год:</span>
+                    <span id="current-year-display">2026</span>
+                </span>
+                <button type="button" class="btn btn_logout" id="btn-logout">Выйти</button>
+            </div>
+        </header>
+
+        <main class="content">
+            <section class="content-side">
+                <div class="side-header">
+                    <h2 class="side-title">Сотрудники</h2>
+                    <button type="button" class="btn btn_add" id="btn-add-user">+ Добавить</button>
+                </div>
+                <div id="users-container"></div>
+                <div class="side-footer">
+                    <button type="button" class="btn_link" id="btn-reset">Сбросить всё</button>
+                </div>
+            </section>
+
+            <section class="content-main">
+                <div class="calendar" id="calendar-container"></div>
+            </section>
+        </main>
+    </div>
+
+    <div class="popup">
+        <div class="popup__container" id="popup__container">
+            <h2 class="popup__title">Дата</h2>
+            <div class="popup__content"></div>
+            <button type="button" class="popup__close-button" aria-label="Закрыть"></button>
+        </div>
+    </div>
+
+    <script type="module" src="./firebase-config.js"></script>
+    <script type="module" src="./scripts/app.js"></script>
+</body>
+
+</html>

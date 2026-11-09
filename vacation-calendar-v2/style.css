@@ -1,0 +1,6 @@
+/* style.css — Главный файл стилей */
+@import url('./styles/01-base.css');
+@import url('./styles/02-layout.css');
+@import url('./styles/03-components.css');
+@import url('./styles/04-calendar.css');
+@import url('./styles/05-popup.css');

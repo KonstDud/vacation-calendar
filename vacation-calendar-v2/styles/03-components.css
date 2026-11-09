@@ -1,0 +1,332 @@
+/* --- Кнопки --- */
+.btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn_add {
+    background: var(--accent-green);
+    color: #fff;
+}
+
+.btn_add:hover {
+    background: #059669;
+}
+
+.btn_small {
+    background: var(--bg-input) !important;
+    color: var(--text-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 6px 10px;
+    font-size: 12px;
+    width: 100%;
+    margin-top: 8px;
+    box-shadow: none;
+}
+
+.btn_small:hover {
+    background: var(--bg-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+.btn_link {
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 8px;
+    width: 100%;
+    text-align: center;
+    transition: color 0.2s;
+}
+
+.btn_link:hover {
+    color: var(--accent-red);
+}
+
+/* --- Карточки пользователей --- */
+.form__user {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    position: relative;
+    /* Важно для работы z-index */
+    z-index: 1;
+    /* Базовый слой */
+    transition: z-index 0.2s;
+    /* Плавный переход слоев */
+}
+
+.form__user:hover {
+    z-index: 10;
+    /* При наведении карточка поднимается над соседними */
+}
+
+.form__user-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form__user-check {
+    display: none;
+}
+
+.form__color {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    background: transparent;
+    flex-shrink: 0;
+}
+
+.form__color::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.form__color::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+/* --- Имя и умный тултип --- */
+.form__username-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.form__username {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.form__username:hover {
+    text-decoration: underline;
+}
+
+.form__username-tooltip {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    transform: translateY(-4px);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text-primary);
+    box-shadow: var(--shadow-hover);
+    z-index: 9999;
+    /* Поднимаем тултип над всем */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.form__username-wrapper:hover .form__username-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.form__user-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0.3;
+    transition: opacity 0.2s;
+}
+
+.form__user:hover .form__user-actions {
+    opacity: 1;
+}
+
+/* Стили для иконок */
+.btn_icon {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn_icon:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn_icon.delete:hover {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* Стиль для скрытого глаза */
+.btn_icon.hidden {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.btn_icon.hidden:hover {
+    opacity: 1;
+}
+
+/* --- Блок отпуска --- */
+.form__vacations-list {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.form__vacation {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 6px;
+}
+
+.form__vacation-dates {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.form__date-sep {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.form__date {
+    width: 100%;
+    padding: 4px 6px;
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+}
+
+.form__date:focus {
+    border-color: var(--accent-blue);
+}
+
+/* Фикс иконки календаря в инпутах дат */
+.form__date::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.form__date::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+.form__vacation-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.form__user_hidden {
+    padding: 6px 10px;
+    border-left: 3px solid #fff;
+    opacity: 0.8;
+    position: relative;
+    z-index: 2;
+    /* Свернутые карточки тоже поверх базовых */
+}
+
+/* --- Валидация пересечений (внутри пользователя) --- */
+.form__vacation_overlap {
+    border: 1px solid var(--accent-red) !important;
+    background: rgba(239, 68, 68, 0.05) !important;
+}
+
+.form__vacation-alert {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
+    padding: 6px 8px;
+    border-radius: 4px;
+}
+
+/* --- Предупреждение о пересечении с другими --- */
+.form__vacation-cross-alert {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    padding: 6px 8px;
+    border-radius: 4px;
+    line-height: 1.4;
+    overflow: hidden;
+    cursor: default;
+}
+
+.form__vacation-cross-alert svg {
+    flex-shrink: 0;
+}
+
+.form__vacation-cross-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.form__vacation-cross-name {
+    font-weight: 600;
+    margin-left: 4px;
+}
