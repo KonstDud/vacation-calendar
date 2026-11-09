@@ -1,4 +1,5 @@
-// state.js — v2 (Event-Driven + Локальная сортировка)
+// state.js — v2 (Event-Driven + фикс onSnapshot)
+
 const MIN_YEAR = 2000;
 const MAX_YEAR = 2100;
 
@@ -20,6 +21,7 @@ export const state = {
     error: null,
     _unsubscribe: null,
     _pendingRemote: null,
+    _localEditing: false, // Флаг блокировки входящих обновлений
 };
 
 export const stateEvents = new EventTarget();
@@ -80,6 +82,12 @@ async function startSubscription(year) {
 
         users.sort((a, b) => a.order - b.order);
 
+        // Если мы сейчас сохраняем локальные изменения — игнорируем
+        if (state._localEditing) {
+            console.log('[state] localEditing, skipping snapshot');
+            return;
+        }
+
         applyRemoteUsers(users);
     }, (error) => {
         console.error("[state] Ошибка синхронизации:", error);
@@ -108,11 +116,9 @@ export async function setYear(newYear) {
     await startSubscription(newYear);
 }
 
-// Функция для получения списка доступных лет
 export function getAvailableYears() {
     const currentYear = new Date().getFullYear();
     const years = [];
-    // Добавляем текущий год +- 2 года (например, 2024, 2025, 2026, 2027, 2028)
     for (let y = currentYear - 2; y <= currentYear + 3; y++) {
         years.push(y);
     }

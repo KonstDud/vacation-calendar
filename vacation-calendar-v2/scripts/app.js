@@ -1,4 +1,4 @@
-// scripts/app.js — v2 (С фиксом выбора цвета)
+// scripts/app.js — v2 (С отдельными таймерами и флагом localEditing)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -6,19 +6,39 @@ import { initCalendarInteractions } from './calendar-interactions.js';
 import { html, render } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/lit-html.js';
 import { repeat } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/directives/repeat.js';
 
-let saveTimeout;
+// Таймеры для каждого пользователя отдельно
+const saveTimeouts = {};
 
 const getUserDoc = (year, userId) => window.firestore.doc(window.db, "vacationData_v2", String(year), "users", userId);
 const getUsersCollection = (year) => window.firestore.collection(window.db, "vacationData_v2", String(year), "users");
 
 const scheduleSave = (userId, userData) => {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
+    // Ставим флаг, что мы сейчас изменяем данные — onSnapshot не будет вмешиваться
+    state._localEditing = true;
+
+    // Очищаем таймер ТОЛЬКО для этого пользователя
+    if (saveTimeouts[userId]) {
+        clearTimeout(saveTimeouts[userId]);
+    }
+
+    saveTimeouts[userId] = setTimeout(async () => {
         try {
             const { id, ...dataToSave } = userData;
             await window.firestore.setDoc(getUserDoc(state.year, userId), dataToSave, { merge: true });
         } catch (e) {
             console.error('[app] Ошибка сохранения:', e);
+        } finally {
+            delete saveTimeouts[userId];
+            // Снимаем флаг, только если больше нет активных таймеров
+            if (Object.keys(saveTimeouts).length === 0) {
+                state._localEditing = false;
+                // Применяем отложенные обновления, если они были
+                if (state._pendingRemote) {
+                    state.users = state._pendingRemote;
+                    state._pendingRemote = null;
+                    requestRender();
+                }
+            }
         }
     }, 800);
 };
@@ -105,7 +125,7 @@ const countDaysFromYearStart = (dateStr) => {
     return Math.floor((d - yearStart) / (1000 * 3600 * 24)) + 1;
 };
 
-// --- SVG Иконки (для ручного рендера) ---
+// --- SVG Иконки ---
 const getIconEye = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const getIconEyeOff = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 const getIconWarning = () => `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
@@ -139,13 +159,12 @@ function renderVacation(user, vac) {
         ${externalOverlaps.length > 0 ? `<div class="form__vacation-cross-alert" title="Пересекается с: ${crossTitle}">${getIconWarning()} <span class="form__vacation-cross-text">Пересекается с: ${externalOverlaps.map((o, i) => `<span class="form__vacation-cross-name" style="color: ${o.color}">${o.name}${i < externalOverlaps.length - 1 ? ', ' : ''}</span>`).join('')}</span></div>` : ''}
     `;
 
-    // Обработчики дат
     const inputs = div.querySelectorAll('input[type="date"]');
     inputs[0].addEventListener('change', (e) => {
         vac.startDate = e.target.value;
         scheduleSave(user.id, user);
         updateCalendarVacations();
-        renderUserCard(user); // Перерисовываем карточку, чтобы обновить валидацию
+        renderUserCard(user);
     });
     inputs[1].addEventListener('change', (e) => {
         vac.endDate = e.target.value;
@@ -154,8 +173,8 @@ function renderVacation(user, vac) {
         renderUserCard(user);
     });
 
-    // Обработчик удаления
-    div.querySelector('.btn_icon.delete').addEventListener('click', () => {
+    div.querySelector('.btn_icon.delete').addEventListener('click', (e) => {
+        e.stopPropagation();
         user.vacations = user.vacations.filter(v => v.id !== vac.id);
         scheduleSave(user.id, user);
         renderUserCard(user);
@@ -164,10 +183,10 @@ function renderVacation(user, vac) {
     return div;
 }
 
-// --- Ручной рендер карточки сотрудника ---
+// --- Ручной рендер карточки ---
 function renderUserCard(user) {
-    const container = document.getElementById(`user-card-${user.id}`);
-    if (!container) return;
+    const oldContainer = document.getElementById(`user-card-${user.id}`);
+    if (!oldContainer) return;
 
     const isVisible = user.isVisible !== false;
     const isHidden = user.isHidden === true;
@@ -182,10 +201,14 @@ function renderUserCard(user) {
         }
     });
 
-    container.className = `form__user ${isHidden ? 'form__user_hidden' : ''}`;
-    container.style = isHidden ? `border-left-color: ${user.color};` : '';
-    container.innerHTML = `
+    const wrapper = document.createElement('div');
+    wrapper.className = `form__user ${isHidden ? 'form__user_hidden' : ''}`;
+    wrapper.id = `user-card-${user.id}`;
+    wrapper.style = isHidden ? `border-left-color: ${user.color};` : '';
+
+    wrapper.innerHTML = `
         <div class="form__user-header">
+            <div class="form__drag-handle-user" title="Перетащите, чтобы изменить порядок" style="cursor: grab; opacity: 0.5; margin-right: 8px;">${getIconDrag()}</div>
             <button type="button" class="btn_icon eye-btn ${isVisible ? '' : 'hidden'}" title="${isVisible ? 'Скрыть с календаря' : 'Показать на календаре'}">
                 ${isVisible ? getIconEye() : getIconEyeOff()}
             </button>
@@ -211,36 +234,41 @@ function renderUserCard(user) {
         ` : ''}
     `;
 
-    // Обработчики
-    container.querySelector('.eye-btn').addEventListener('click', () => {
+    oldContainer.replaceWith(wrapper);
+
+    wrapper.querySelector('.eye-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
         user.isVisible = !user.isVisible;
         scheduleSave(user.id, user);
-        const eyeBtn = container.querySelector('.eye-btn');
+        const eyeBtn = wrapper.querySelector('.eye-btn');
         eyeBtn.innerHTML = user.isVisible ? getIconEye() : getIconEyeOff();
         eyeBtn.classList.toggle('hidden', !user.isVisible);
         eyeBtn.title = user.isVisible ? 'Скрыть с календаря' : 'Показать на календаре';
         updateCalendarVacations();
     });
 
-    // Используем @change вместо @input, чтобы палитра не закрывалась
-    container.querySelector('.form__color').addEventListener('change', (e) => {
+    wrapper.querySelector('.form__color').addEventListener('change', (e) => {
+        e.stopPropagation();
         user.color = e.target.value;
         scheduleSave(user.id, user);
-        renderUserCard(user); // Перерисовываем только после закрытия палитры
+        renderUserCard(user);
     });
 
-    container.querySelector('.form__username').addEventListener('click', () => {
+    wrapper.querySelector('.form__username').addEventListener('click', (e) => {
+        e.stopPropagation();
         const newName = prompt('Введите новое имя:', user.name);
         if (newName) { user.name = newName; scheduleSave(user.id, user); renderUserCard(user); }
     });
 
-    container.querySelector('.toggle-btn').addEventListener('click', () => {
+    wrapper.querySelector('.toggle-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
         user.isHidden = !user.isHidden;
         scheduleSave(user.id, user);
         renderUserCard(user);
     });
 
-    container.querySelector('.delete-user-btn').addEventListener('click', () => {
+    wrapper.querySelector('.delete-user-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
         if (confirm(`Удалить ${user.name}?`)) {
             state.users = state.users.filter(u => u.id !== user.id);
             window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
@@ -249,19 +277,19 @@ function renderUserCard(user) {
     });
 
     if (!isHidden) {
-        const vacList = container.querySelector('.form__vacations-list');
+        const vacList = wrapper.querySelector('.form__vacations-list');
         displayVacations.forEach(vac => {
             vacList.appendChild(renderVacation(user, vac));
         });
 
-        container.querySelector('.add-vac-btn').addEventListener('click', () => {
+        wrapper.querySelector('.add-vac-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
             if (!user.vacations) user.vacations = [];
             user.vacations.push({ id: `vacationid_${Date.now()}`, startDate: `${state.year}-01-01`, endDate: `${state.year}-01-01` });
             scheduleSave(user.id, user);
             renderUserCard(user);
         });
 
-        // Инициализация Sortable для этого списка
         new Sortable(vacList, {
             animation: 150,
             handle: '.form__drag-handle',
@@ -283,7 +311,7 @@ function renderUserCard(user) {
 const usersContainer = document.getElementById('users-container');
 
 function requestRender() {
-    usersContainer.innerHTML = '';
+    usersContainer.replaceChildren();
     state.users.forEach(user => {
         const div = document.createElement('div');
         div.id = `user-card-${user.id}`;
@@ -360,7 +388,7 @@ function initSortableUsers() {
 
     sortableUsersInstance = new Sortable(usersContainer, {
         animation: 150,
-        handle: '.form__user-header',
+        handle: '.form__drag-handle-user',
         ghostClass: 'form__user-sortable-ghost',
         onEnd: async function (evt) {
             if (evt.oldIndex === evt.newIndex) return;
@@ -436,7 +464,6 @@ document.getElementById('btn-logout').addEventListener('click', () => {
     window.location.href = 'login.html';
 });
 
-// --- Заполнение селекта годов ---
 const yearSelect = document.getElementById('year-select');
 if (yearSelect) {
     const years = getAvailableYears();
