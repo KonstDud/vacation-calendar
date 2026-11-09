@@ -15,8 +15,7 @@ export function initCalendarInteractions() {
         const dayIndex = parseInt(dayDiv.id.replace('dayid_', ''), 10);
         if (!dayIndex) return;
 
-        // Если в этом дне уже есть тултип (отпуск), игнорируем
-        if (dayDiv.querySelector('.calendar__tooltip')) return;
+        // УБРАЛИ ПРОВЕРКУ НА ТУЛТИП. Теперь можно кликать по занятым дням.
 
         if (selectionStart === null) {
             selectionStart = dayIndex;
@@ -27,11 +26,7 @@ export function initCalendarInteractions() {
         let start = Math.min(selectionStart, dayIndex);
         let end = Math.max(selectionStart, dayIndex);
 
-        if (isRangeOverlapping(start, end)) {
-            alert('Выбранный период пересекается с уже существующими отпусками. Выберите другие даты.');
-            clearSelection();
-            return;
-        }
+        // Убрали глобальную проверку на пересечение. Проверяем только при сохранении.
 
         highlightRange(start, end);
 
@@ -61,28 +56,6 @@ function highlightRange(startIndex, endIndex) {
 function clearSelection() {
     document.querySelectorAll('.calendar__day.selected').forEach(el => el.classList.remove('selected'));
     selectionStart = null;
-}
-
-function isRangeOverlapping(startIndex, endIndex) {
-    let overlaps = false;
-    state.users.forEach(user => {
-        if (user.isVisible === false) return;
-        (user.vacations || []).forEach(vac => {
-            if (!vac.startDate || !vac.endDate) return;
-
-            const dStart = new Date(vac.startDate);
-            const dEnd = new Date(vac.endDate);
-            const yearStart = new Date(state.year, 0, 1);
-
-            const vStart = Math.floor((dStart - yearStart) / (1000 * 3600 * 24)) + 1;
-            const vEnd = Math.floor((dEnd - yearStart) / (1000 * 3600 * 24)) + 1;
-
-            if (startIndex <= vEnd && endIndex >= vStart) {
-                overlaps = true;
-            }
-        });
-    });
-    return overlaps;
 }
 
 function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {

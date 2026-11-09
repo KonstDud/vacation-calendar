@@ -350,3 +350,18 @@
     opacity: 0.4;
     background: var(--bg-hover) !important;
 }
+
+/* --- Итоги по сотруднику --- */
+.form__user-totals {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.form__user-totals b {
+    color: var(--text-primary);
+}

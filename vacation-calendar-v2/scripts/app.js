@@ -1,9 +1,10 @@
-// scripts/app.js — v2 (С ручной сортировкой отпусков и фиксом переименования)
+// scripts/app.js — v2 (Финальный фикс перетаскивания через ручной DOM)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
 import { initCalendarInteractions } from './calendar-interactions.js';
 import { html, render } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/lit-html.js';
+import { repeat } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/directives/repeat.js';
 
 let saveTimeout;
 
@@ -104,190 +105,189 @@ const countDaysFromYearStart = (dateStr) => {
     return Math.floor((d - yearStart) / (1000 * 3600 * 24)) + 1;
 };
 
-// --- SVG Иконки ---
-const iconEye = html`
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-        <circle cx="12" cy="12" r="3"/>
-    </svg>
-`;
+// --- SVG Иконки (для рендера вручную) ---
+const getIconEye = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const getIconEyeOff = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+const getIconWarning = () => `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+const getIconDrag = () => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor: grab; opacity: 0.5;"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>`;
 
-const iconEyeOff = html`
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-        <line x1="1" y1="1" x2="23" y2="23"/>
-    </svg>
-`;
-
-const iconWarning = html`
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="8" x2="12" y2="12"></line>
-        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-    </svg>
-`;
-
-const iconDrag = html`
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor: grab; opacity: 0.5;">
-        <circle cx="9" cy="12" r="1"></circle>
-        <circle cx="9" cy="5" r="1"></circle>
-        <circle cx="9" cy="19" r="1"></circle>
-        <circle cx="15" cy="12" r="1"></circle>
-        <circle cx="15" cy="5" r="1"></circle>
-        <circle cx="15" cy="19" r="1"></circle>
-    </svg>
-`;
-
-// --- Lit-html Шаблоны ---
-
-const vacationTemplate = (user, vac) => {
+// --- Ручной рендер отпусков ---
+function renderVacation(user, vac) {
     const calDays = getCalendarDays(vac.startDate, vac.endDate);
     const workDays = getWorkingDays(vac.startDate, vac.endDate);
-
     const { isOverlap, isInvalid } = validateInternalOverlap(user, vac.id);
     const externalOverlaps = getExternalOverlaps(user, vac);
-
     const hasError = isOverlap || isInvalid;
     const crossTitle = externalOverlaps.map(o => o.name).join(', ');
 
-    return html`
-        <div class="form__vacation ${hasError ? 'form__vacation_overlap' : ''}" data-id="${vac.id}">
-            <div class="form__vacation-dates">
-                <div class="form__drag-handle" title="Перетащите, чтобы изменить порядок">${iconDrag}</div>
-                
-                <input type="date" class="form__date" .value=${vac.startDate} 
-                    @change=${(e) => {
-            vac.startDate = e.target.value;
-            scheduleSave(user.id, user);
-            updateCalendarVacations();
-        }} 
-                />
-                <span class="form__date-sep">—</span>
-                <input type="date" class="form__date" .value=${vac.endDate} 
-                    @change=${(e) => {
-            vac.endDate = e.target.value;
-            scheduleSave(user.id, user);
-            updateCalendarVacations();
-        }} 
-                />
-            </div>
-            <div class="form__vacation-info">
-                <span>${calDays} кал. / ${workDays} раб.</span>
-                <button type="button" class="btn_icon delete" title="Удалить отпуск"
-                    @click=${() => {
-            user.vacations = user.vacations.filter(v => v.id !== vac.id);
-            scheduleSave(user.id, user);
-            requestRender();
-        }}>✕</button>
-            </div>
-            
-            ${isInvalid ? html`
-                <div class="form__vacation-alert">
-                    ${iconWarning} Дата окончания раньше даты начала!
-                </div>
-            ` : ''}
-
-            ${isOverlap ? html`
-                <div class="form__vacation-alert">
-                    ${iconWarning} Пересечение с другим отпуском этого сотрудника!
-                </div>
-            ` : ''}
-
-            ${externalOverlaps.length > 0 ? html`
-                <div class="form__vacation-cross-alert" title="Пересекается с: ${crossTitle}">
-                    ${iconWarning} 
-                    <span class="form__vacation-cross-text">
-                        Пересекается с: 
-                        ${externalOverlaps.map((o, i) => html`
-                            <span class="form__vacation-cross-name" style="color: ${o.color}">
-                                ${o.name}${i < externalOverlaps.length - 1 ? ', ' : ''}
-                            </span>
-                        `)}
-                    </span>
-                </div>
-            ` : ''}
+    const div = document.createElement('div');
+    div.className = `form__vacation ${hasError ? 'form__vacation_overlap' : ''}`;
+    div.dataset.id = vac.id;
+    div.innerHTML = `
+        <div class="form__vacation-dates">
+            <div class="form__drag-handle" title="Перетащите, чтобы изменить порядок">${getIconDrag()}</div>
+            <input type="date" class="form__date" value="${vac.startDate || ''}" />
+            <span class="form__date-sep">—</span>
+            <input type="date" class="form__date" value="${vac.endDate || ''}" />
         </div>
+        <div class="form__vacation-info">
+            <span>${calDays} кал. / ${workDays} раб.</span>
+            <button type="button" class="btn_icon delete" title="Удалить отпуск">✕</button>
+        </div>
+        ${isInvalid ? `<div class="form__vacation-alert">${getIconWarning()} Дата окончания раньше даты начала!</div>` : ''}
+        ${isOverlap ? `<div class="form__vacation-alert">${getIconWarning()} Пересечение с другим отпуском этого сотрудника!</div>` : ''}
+        ${externalOverlaps.length > 0 ? `<div class="form__vacation-cross-alert" title="Пересекается с: ${crossTitle}">${getIconWarning()} <span class="form__vacation-cross-text">Пересекается с: ${externalOverlaps.map((o, i) => `<span class="form__vacation-cross-name" style="color: ${o.color}">${o.name}${i < externalOverlaps.length - 1 ? ', ' : ''}</span>`).join('')}</span></div>` : ''}
     `;
-};
 
-const userTemplate = (user) => {
+    // Обработчики дат
+    const inputs = div.querySelectorAll('input[type="date"]');
+    inputs[0].addEventListener('change', (e) => {
+        vac.startDate = e.target.value;
+        scheduleSave(user.id, user);
+        updateCalendarVacations();
+        renderUserCard(user); // Перерисовываем карточку, чтобы обновить валидацию
+    });
+    inputs[1].addEventListener('change', (e) => {
+        vac.endDate = e.target.value;
+        scheduleSave(user.id, user);
+        updateCalendarVacations();
+        renderUserCard(user);
+    });
+
+    // Обработчик удаления
+    div.querySelector('.btn_icon.delete').addEventListener('click', () => {
+        user.vacations = user.vacations.filter(v => v.id !== vac.id);
+        scheduleSave(user.id, user);
+        renderUserCard(user);
+    });
+
+    return div;
+}
+
+// --- Ручной рендер карточки сотрудника ---
+function renderUserCard(user) {
+    const container = document.getElementById(`user-card-${user.id}`);
+    if (!container) return;
+
     const isVisible = user.isVisible !== false;
     const isHidden = user.isHidden === true;
-
     const displayVacations = user.vacations || [];
 
-    return html`
-    <div class="form__user ${isHidden ? 'form__user_hidden' : ''}" id="${user.id}" style="${isHidden ? `border-left-color: ${user.color};` : ''}">
-        <div class="form__user-header">
-            <button type="button" class="btn_icon ${isVisible ? '' : 'hidden'}" title="${isVisible ? 'Скрыть с календаря' : 'Показать на календаре'}"
-                @click=${() => { user.isVisible = !isVisible; scheduleSave(user.id, user); requestRender(); }}>
-                ${isVisible ? iconEye : iconEyeOff}
-            </button>
+    let totalCalDays = 0;
+    let totalWorkDays = 0;
+    displayVacations.forEach(vac => {
+        if (vac.startDate && vac.endDate && vac.endDate >= vac.startDate) {
+            totalCalDays += getCalendarDays(vac.startDate, vac.endDate);
+            totalWorkDays += getWorkingDays(vac.startDate, vac.endDate);
+        }
+    });
 
-            <input type="color" class="form__color" .value=${user.color} 
-                @input=${(e) => { user.color = e.target.value; scheduleSave(user.id, user); requestRender(); }} 
-                style="${isHidden ? 'display: none;' : ''}"
-            />
-            
+    container.className = `form__user ${isHidden ? 'form__user_hidden' : ''}`;
+    container.style = isHidden ? `border-left-color: ${user.color};` : '';
+    container.innerHTML = `
+        <div class="form__user-header">
+            <button type="button" class="btn_icon eye-btn ${isVisible ? '' : 'hidden'}" title="${isVisible ? 'Скрыть с календаря' : 'Показать на календаре'}">
+                ${isVisible ? getIconEye() : getIconEyeOff()}
+            </button>
+            <input type="color" class="form__color" value="${user.color}" style="${isHidden ? 'display: none;' : ''}" />
             <div class="form__username-wrapper">
-                <!-- Теперь клик по имени работает всегда -->
-                <h2 class="form__username" @click=${() => {
-            const newName = prompt('Введите новое имя:', user.name);
-            if (newName) { user.name = newName; scheduleSave(user.id, user); requestRender(); }
-        }}>${user.name}</h2>
-                
-                ${!isHidden ? html`
-                    <div class="form__username-tooltip">${user.name}</div>
-                ` : ''}
+                <h2 class="form__username">${user.name}</h2>
+                ${!isHidden ? `<div class="form__username-tooltip">${user.name}</div>` : ''}
             </div>
-            
             <div class="form__user-actions">
-                <button type="button" class="btn_icon" title="${isHidden ? 'Развернуть' : 'Свернуть'}"
-                    @click=${() => { user.isHidden = !user.isHidden; scheduleSave(user.id, user); requestRender(); }}>
-                    ${isHidden ? '▼' : '▲'}
-                </button>
-                
-                <button type="button" class="btn_icon delete" title="Удалить"
-                    @click=${() => {
-            if (confirm(`Удалить ${user.name}?`)) {
-                state.users = state.users.filter(u => u.id !== user.id);
-                window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
-                requestRender();
-            }
-        }}>✕</button>
+                <button type="button" class="btn_icon toggle-btn" title="${isHidden ? 'Развернуть' : 'Свернуть'}">${isHidden ? '▼' : '▲'}</button>
+                <button type="button" class="btn_icon delete-user-btn" title="Удалить">✕</button>
             </div>
         </div>
-        
-        ${!isHidden ? html`
-            <div class="form__vacations-list" id="vacations-list-${user.id}">
-                ${displayVacations.map(vac => vacationTemplate(user, vac))}
-                <button type="button" class="btn btn_small" 
-                    @click=${() => {
-                if (!user.vacations) user.vacations = [];
-                user.vacations.push({ id: `vacationid_${Date.now()}`, startDate: `${state.year}-01-01`, endDate: `${state.year}-01-01` });
-                scheduleSave(user.id, user);
-                requestRender();
-            }}>+ Добавить отпуск</button>
-            </div>
+        ${!isHidden ? `
+            <div class="form__vacations-list" id="vacations-list-${user.id}"></div>
+            <button type="button" class="btn btn_small add-vac-btn">+ Добавить отпуск</button>
+            ${displayVacations.length > 0 ? `
+                <div class="form__user-totals">
+                    <span>Итого календарных: <b>${totalCalDays}</b></span>
+                    <span>Итого рабочих: <b>${totalWorkDays}</b></span>
+                </div>
+            ` : ''}
         ` : ''}
-    </div>
-`};
+    `;
 
-const usersListTemplate = () => html`
-    <div class="form">
-        ${state.users.map(user => userTemplate(user))}
-    </div>
-`;
+    // Обработчики
+    container.querySelector('.eye-btn').addEventListener('click', () => {
+        user.isVisible = !user.isVisible;
+        scheduleSave(user.id, user);
+        renderUserCard(user);
+    });
+
+    container.querySelector('.form__color').addEventListener('input', (e) => {
+        user.color = e.target.value;
+        scheduleSave(user.id, user);
+        renderUserCard(user);
+    });
+
+    container.querySelector('.form__username').addEventListener('click', () => {
+        const newName = prompt('Введите новое имя:', user.name);
+        if (newName) { user.name = newName; scheduleSave(user.id, user); renderUserCard(user); }
+    });
+
+    container.querySelector('.toggle-btn').addEventListener('click', () => {
+        user.isHidden = !user.isHidden;
+        scheduleSave(user.id, user);
+        renderUserCard(user);
+    });
+
+    container.querySelector('.delete-user-btn').addEventListener('click', () => {
+        if (confirm(`Удалить ${user.name}?`)) {
+            state.users = state.users.filter(u => u.id !== user.id);
+            window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
+            requestRender();
+        }
+    });
+
+    if (!isHidden) {
+        const vacList = container.querySelector('.form__vacations-list');
+        displayVacations.forEach(vac => {
+            vacList.appendChild(renderVacation(user, vac));
+        });
+
+        container.querySelector('.add-vac-btn').addEventListener('click', () => {
+            if (!user.vacations) user.vacations = [];
+            user.vacations.push({ id: `vacationid_${Date.now()}`, startDate: `${state.year}-01-01`, endDate: `${state.year}-01-01` });
+            scheduleSave(user.id, user);
+            renderUserCard(user);
+        });
+
+        // Инициализация Sortable для этого списка
+        new Sortable(vacList, {
+            animation: 150,
+            handle: '.form__drag-handle',
+            ghostClass: 'form__vacation-sortable-ghost',
+            onEnd: async function (evt) {
+                if (evt.oldIndex === evt.newIndex) return;
+                const vacs = [...user.vacations];
+                const movedVac = vacs.splice(evt.oldIndex, 1)[0];
+                vacs.splice(evt.newIndex, 0, movedVac);
+                user.vacations = vacs;
+                scheduleSave(user.id, user);
+                // НЕ вызываем renderUserCard, чтобы не сбить визуал
+            }
+        });
+    }
+}
 
 // --- Логика рендера ---
 
 const usersContainer = document.getElementById('users-container');
 
 function requestRender() {
-    render(usersListTemplate(), usersContainer);
+    usersContainer.innerHTML = '';
+    state.users.forEach(user => {
+        const div = document.createElement('div');
+        div.id = `user-card-${user.id}`;
+        usersContainer.appendChild(div);
+        renderUserCard(user);
+    });
     updateCalendarVacations();
     initSortableUsers();
-    initSortableVacations();
 }
 
 function updateCalendarVacations() {
@@ -345,30 +345,30 @@ function updateCalendarVacations() {
     });
 }
 
-// --- Sortable (Drag and Drop) ---
+// --- Sortable для сотрудников ---
 
 let sortableUsersInstance = null;
-let sortableVacationsInstances = [];
 
 function initSortableUsers() {
-    const form = document.querySelector('.form');
-    if (!form) return;
-
     if (sortableUsersInstance) {
         sortableUsersInstance.destroy();
     }
 
-    sortableUsersInstance = new Sortable(form, {
+    sortableUsersInstance = new Sortable(usersContainer, {
         animation: 150,
         handle: '.form__user-header',
         ghostClass: 'form__user-sortable-ghost',
         onEnd: async function (evt) {
-            const newOrderIds = Array.from(form.children).map(el => el.id);
+            if (evt.oldIndex === evt.newIndex) return;
+
+            const newOrderIds = Array.from(usersContainer.children).map(el => el.id.replace('user-card-', ''));
             const newUsers = [];
             newOrderIds.forEach(id => {
                 const user = state.users.find(u => u.id === id);
                 if (user) newUsers.push(user);
             });
+
+            state.users = [...newUsers];
 
             newUsers.forEach((user, index) => {
                 if (user.order !== index) {
@@ -377,40 +377,8 @@ function initSortableUsers() {
                 }
             });
 
-            state.users = newUsers;
             requestRender();
         }
-    });
-}
-
-function initSortableVacations() {
-    sortableVacationsInstances.forEach(inst => inst.destroy());
-    sortableVacationsInstances = [];
-
-    document.querySelectorAll('.form__vacations-list').forEach(container => {
-        const userId = container.id.replace('vacations-list-', '');
-        const user = state.users.find(u => u.id === userId);
-        if (!user) return;
-
-        const inst = new Sortable(container, {
-            animation: 150,
-            handle: '.form__drag-handle',
-            ghostClass: 'form__vacation-sortable-ghost',
-            onEnd: async function (evt) {
-                const newIds = Array.from(container.querySelectorAll('.form__vacation')).map(el => el.dataset.id);
-
-                const newVacations = [];
-                newIds.forEach(id => {
-                    const vac = user.vacations.find(v => v.id === id);
-                    if (vac) newVacations.push(vac);
-                });
-
-                user.vacations = newVacations;
-                scheduleSave(user.id, user);
-                requestRender();
-            }
-        });
-        sortableVacationsInstances.push(inst);
     });
 }
 
@@ -445,7 +413,7 @@ document.getElementById('btn-add-user').addEventListener('click', () => {
         isVisible: true
     };
 
-    state.users.push(newUser);
+    state.users = [...state.users, newUser];
     requestRender();
     window.firestore.setDoc(newDocRef, newUser).catch(console.error);
 });
