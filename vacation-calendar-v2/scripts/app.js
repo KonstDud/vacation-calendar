@@ -1,4 +1,4 @@
-// scripts/app.js — v2 (Финальный фикс перетаскивания через ручной DOM)
+// scripts/app.js — v2 (Оптимизированная версия)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -105,7 +105,7 @@ const countDaysFromYearStart = (dateStr) => {
     return Math.floor((d - yearStart) / (1000 * 3600 * 24)) + 1;
 };
 
-// --- SVG Иконки (для рендера вручную) ---
+// --- SVG Иконки (для ручного рендера) ---
 const getIconEye = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const getIconEyeOff = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 const getIconWarning = () => `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
@@ -215,7 +215,12 @@ function renderUserCard(user) {
     container.querySelector('.eye-btn').addEventListener('click', () => {
         user.isVisible = !user.isVisible;
         scheduleSave(user.id, user);
-        renderUserCard(user);
+        // Обновляем ТОЛЬКО иконку и календарь, не перерисовывая всю карточку
+        const eyeBtn = container.querySelector('.eye-btn');
+        eyeBtn.innerHTML = user.isVisible ? getIconEye() : getIconEyeOff();
+        eyeBtn.classList.toggle('hidden', !user.isVisible);
+        eyeBtn.title = user.isVisible ? 'Скрыть с календаря' : 'Показать на календаре';
+        updateCalendarVacations();
     });
 
     container.querySelector('.form__color').addEventListener('input', (e) => {
@@ -268,7 +273,6 @@ function renderUserCard(user) {
                 vacs.splice(evt.newIndex, 0, movedVac);
                 user.vacations = vacs;
                 scheduleSave(user.id, user);
-                // НЕ вызываем renderUserCard, чтобы не сбить визуал
             }
         });
     }
