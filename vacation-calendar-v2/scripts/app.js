@@ -1,4 +1,4 @@
-// scripts/app.js — v2 (Оптимизированная версия)
+// scripts/app.js — v2 (С фиксом выбора цвета)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -215,7 +215,6 @@ function renderUserCard(user) {
     container.querySelector('.eye-btn').addEventListener('click', () => {
         user.isVisible = !user.isVisible;
         scheduleSave(user.id, user);
-        // Обновляем ТОЛЬКО иконку и календарь, не перерисовывая всю карточку
         const eyeBtn = container.querySelector('.eye-btn');
         eyeBtn.innerHTML = user.isVisible ? getIconEye() : getIconEyeOff();
         eyeBtn.classList.toggle('hidden', !user.isVisible);
@@ -223,10 +222,11 @@ function renderUserCard(user) {
         updateCalendarVacations();
     });
 
-    container.querySelector('.form__color').addEventListener('input', (e) => {
+    // Используем @change вместо @input, чтобы палитра не закрывалась
+    container.querySelector('.form__color').addEventListener('change', (e) => {
         user.color = e.target.value;
         scheduleSave(user.id, user);
-        renderUserCard(user);
+        renderUserCard(user); // Перерисовываем только после закрытия палитры
     });
 
     container.querySelector('.form__username').addEventListener('click', () => {
