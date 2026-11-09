@@ -15,7 +15,8 @@ export function initCalendarInteractions() {
         const dayIndex = parseInt(dayDiv.id.replace('dayid_', ''), 10);
         if (!dayIndex) return;
 
-        // Убрали проверку на наличие тултипа! Теперь можно кликать по занятым дням.
+        // Если в этом дне уже есть тултип (отпуск), игнорируем
+        if (dayDiv.querySelector('.calendar__tooltip')) return;
 
         if (selectionStart === null) {
             selectionStart = dayIndex;
@@ -26,7 +27,11 @@ export function initCalendarInteractions() {
         let start = Math.min(selectionStart, dayIndex);
         let end = Math.max(selectionStart, dayIndex);
 
-        // Убрали глобальную проверку на пересечение. Теперь проверяем только при сохранении для конкретного юзера.
+        if (isRangeOverlapping(start, end)) {
+            alert('Выбранный период пересекается с уже существующими отпусками. Выберите другие даты.');
+            clearSelection();
+            return;
+        }
 
         highlightRange(start, end);
 
@@ -58,22 +63,24 @@ function clearSelection() {
     selectionStart = null;
 }
 
-// Функция проверки пересечения для конкретного пользователя
-function checkUserOverlap(user, startIndex, endIndex) {
+function isRangeOverlapping(startIndex, endIndex) {
     let overlaps = false;
-    (user.vacations || []).forEach(vac => {
-        if (!vac.startDate || !vac.endDate) return;
+    state.users.forEach(user => {
+        if (user.isVisible === false) return;
+        (user.vacations || []).forEach(vac => {
+            if (!vac.startDate || !vac.endDate) return;
 
-        const dStart = new Date(vac.startDate);
-        const dEnd = new Date(vac.endDate);
-        const yearStart = new Date(state.year, 0, 1);
+            const dStart = new Date(vac.startDate);
+            const dEnd = new Date(vac.endDate);
+            const yearStart = new Date(state.year, 0, 1);
 
-        const vStart = Math.floor((dStart - yearStart) / (1000 * 3600 * 24)) + 1;
-        const vEnd = Math.floor((dEnd - yearStart) / (1000 * 3600 * 24)) + 1;
+            const vStart = Math.floor((dStart - yearStart) / (1000 * 3600 * 24)) + 1;
+            const vEnd = Math.floor((dEnd - yearStart) / (1000 * 3600 * 24)) + 1;
 
-        if (startIndex <= vEnd && endIndex >= vStart) {
-            overlaps = true;
-        }
+            if (startIndex <= vEnd && endIndex >= vStart) {
+                overlaps = true;
+            }
+        });
     });
     return overlaps;
 }
@@ -137,7 +144,18 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
         if (!user) return;
 
         // Проверяем пересечение ИМЕННО У ЭТОГО СОТРУДНИКА
-        if (checkUserOverlap(user, startIdx, endIdx)) {
+        let userOverlap = false;
+        (user.vacations || []).forEach(vac => {
+            if (!vac.startDate || !vac.endDate) return;
+            const dStart = new Date(vac.startDate);
+            const dEnd = new Date(vac.endDate);
+            const yearStart = new Date(state.year, 0, 1);
+            const vStart = Math.floor((dStart - yearStart) / (1000 * 3600 * 24)) + 1;
+            const vEnd = Math.floor((dEnd - yearStart) / (1000 * 3600 * 24)) + 1;
+            if (startIdx <= vEnd && endIdx >= vStart) userOverlap = true;
+        });
+
+        if (userOverlap) {
             errorDiv.textContent = `У сотрудника ${user.name} уже есть отпуск в этот период.`;
             errorDiv.style.display = 'block';
             return;
