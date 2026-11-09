@@ -1,4 +1,4 @@
-// scripts/app.js — v2 (Без автосортировки, стабильная версия)
+// scripts/app.js — v2 (С ручной сортировкой отпусков и фиксом переименования)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -127,6 +127,17 @@ const iconWarning = html`
     </svg>
 `;
 
+const iconDrag = html`
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor: grab; opacity: 0.5;">
+        <circle cx="9" cy="12" r="1"></circle>
+        <circle cx="9" cy="5" r="1"></circle>
+        <circle cx="9" cy="19" r="1"></circle>
+        <circle cx="15" cy="12" r="1"></circle>
+        <circle cx="15" cy="5" r="1"></circle>
+        <circle cx="15" cy="19" r="1"></circle>
+    </svg>
+`;
+
 // --- Lit-html Шаблоны ---
 
 const vacationTemplate = (user, vac) => {
@@ -140,8 +151,10 @@ const vacationTemplate = (user, vac) => {
     const crossTitle = externalOverlaps.map(o => o.name).join(', ');
 
     return html`
-        <div class="form__vacation ${hasError ? 'form__vacation_overlap' : ''}">
+        <div class="form__vacation ${hasError ? 'form__vacation_overlap' : ''}" data-id="${vac.id}">
             <div class="form__vacation-dates">
+                <div class="form__drag-handle" title="Перетащите, чтобы изменить порядок">${iconDrag}</div>
+                
                 <input type="date" class="form__date" .value=${vac.startDate} 
                     @change=${(e) => {
             vac.startDate = e.target.value;
@@ -201,7 +214,6 @@ const userTemplate = (user) => {
     const isVisible = user.isVisible !== false;
     const isHidden = user.isHidden === true;
 
-    // Никакой сортировки — как есть
     const displayVacations = user.vacations || [];
 
     return html`
@@ -218,11 +230,10 @@ const userTemplate = (user) => {
             />
             
             <div class="form__username-wrapper">
+                <!-- Теперь клик по имени работает всегда -->
                 <h2 class="form__username" @click=${() => {
-            if (!isHidden) {
-                const newName = prompt('Введите новое имя:', user.name);
-                if (newName) { user.name = newName; scheduleSave(user.id, user); requestRender(); }
-            }
+            const newName = prompt('Введите новое имя:', user.name);
+            if (newName) { user.name = newName; scheduleSave(user.id, user); requestRender(); }
         }}>${user.name}</h2>
                 
                 ${!isHidden ? html`
@@ -248,7 +259,7 @@ const userTemplate = (user) => {
         </div>
         
         ${!isHidden ? html`
-            <div class="form__vacations-list">
+            <div class="form__vacations-list" id="vacations-list-${user.id}">
                 ${displayVacations.map(vac => vacationTemplate(user, vac))}
                 <button type="button" class="btn btn_small" 
                     @click=${() => {
@@ -275,7 +286,8 @@ const usersContainer = document.getElementById('users-container');
 function requestRender() {
     render(usersListTemplate(), usersContainer);
     updateCalendarVacations();
-    initSortable();
+    initSortableUsers();
+    initSortableVacations();
 }
 
 function updateCalendarVacations() {
@@ -335,17 +347,18 @@ function updateCalendarVacations() {
 
 // --- Sortable (Drag and Drop) ---
 
-let sortableInstance = null;
+let sortableUsersInstance = null;
+let sortableVacationsInstances = [];
 
-function initSortable() {
+function initSortableUsers() {
     const form = document.querySelector('.form');
     if (!form) return;
 
-    if (sortableInstance) {
-        sortableInstance.destroy();
+    if (sortableUsersInstance) {
+        sortableUsersInstance.destroy();
     }
 
-    sortableInstance = new Sortable(form, {
+    sortableUsersInstance = new Sortable(form, {
         animation: 150,
         handle: '.form__user-header',
         ghostClass: 'form__user-sortable-ghost',
@@ -360,7 +373,6 @@ function initSortable() {
             newUsers.forEach((user, index) => {
                 if (user.order !== index) {
                     user.order = index;
-                    const { id, ...dataToSave } = user;
                     window.firestore.setDoc(getUserDoc(state.year, user.id), { order: index }, { merge: true }).catch(console.error);
                 }
             });
@@ -368,6 +380,37 @@ function initSortable() {
             state.users = newUsers;
             requestRender();
         }
+    });
+}
+
+function initSortableVacations() {
+    sortableVacationsInstances.forEach(inst => inst.destroy());
+    sortableVacationsInstances = [];
+
+    document.querySelectorAll('.form__vacations-list').forEach(container => {
+        const userId = container.id.replace('vacations-list-', '');
+        const user = state.users.find(u => u.id === userId);
+        if (!user) return;
+
+        const inst = new Sortable(container, {
+            animation: 150,
+            handle: '.form__drag-handle',
+            ghostClass: 'form__vacation-sortable-ghost',
+            onEnd: async function (evt) {
+                const newIds = Array.from(container.querySelectorAll('.form__vacation')).map(el => el.dataset.id);
+
+                const newVacations = [];
+                newIds.forEach(id => {
+                    const vac = user.vacations.find(v => v.id === id);
+                    if (vac) newVacations.push(vac);
+                });
+
+                user.vacations = newVacations;
+                scheduleSave(user.id, user);
+                requestRender();
+            }
+        });
+        sortableVacationsInstances.push(inst);
     });
 }
 

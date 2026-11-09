@@ -330,3 +330,23 @@
     font-weight: 600;
     margin-left: 4px;
 }
+
+/* --- Ручка для перетаскивания отпуска --- */
+.form__drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    color: var(--text-muted);
+    transition: color 0.2s;
+}
+
+.form__drag-handle:hover {
+    color: var(--text-primary);
+}
+
+/* Стиль для "призрака" при перетаскивании отпуска */
+.form__vacation-sortable-ghost {
+    opacity: 0.4;
+    background: var(--bg-hover) !important;
+}
