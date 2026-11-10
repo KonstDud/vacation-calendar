@@ -476,13 +476,12 @@ if (yearSelect) {
 
     yearSelect.value = state.year;
 
-    yearSelect.addEventListener('change', async (e) => {
+    yearSelect.addEventListener('change', (e) => {
         const newYear = Number(e.target.value);
         if (newYear !== state.year) {
-            await setYear(newYear);
-            document.getElementById('calendar-container').innerHTML = '';
-            renderCalendar(newYear);
-            requestRender();
+            const url = new URL(window.location.href);
+            url.searchParams.set('year', String(newYear));
+            window.location.href = url.toString();
         }
     });
 }
