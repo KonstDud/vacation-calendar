@@ -377,3 +377,16 @@
 .form__user-totals b {
     color: var(--text-primary);
 }
+
+/* Неактивный глаз (когда группа скрыта) */
+.btn_icon.inactive-group {
+    opacity: 0.3;
+    color: var(--text-muted) !important;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn_icon:disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+}

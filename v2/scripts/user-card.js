@@ -35,17 +35,50 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
         }
     });
 
+    // Проверяем видимость группы
+    let groupIsVisible = true;
+    if (user.groupId) {
+        const group = state.groups.find(g => g.id === user.groupId);
+        if (group) groupIsVisible = group.isVisible !== false;
+    } else {
+        const ungrouped = state.groups.find(g => g.id === 'ungrouped');
+        if (ungrouped) groupIsVisible = ungrouped.isVisible !== false;
+    }
+
     const wrapper = document.createElement('div');
     wrapper.className = `form__user ${isHidden ? 'form__user_hidden' : ''}`;
     wrapper.id = `user-card-${user.id}`;
 
+    const colorOrPlaceholder = !isHidden
+        ? `<input type="color" class="form__color" value="${user.color}" />`
+        : `<div style="width: 16px; height: 16px; flex-shrink: 0;"></div>`;
+
+    let eyeIcon = '';
+    let eyeClass = '';
+    let eyeDisabled = false;
+
+    if (!groupIsVisible) {
+        // Если группа выключена, глаз блеклый и неактивный
+        eyeIcon = getIconEye();
+        eyeClass = 'inactive-group';
+        eyeDisabled = true;
+    } else {
+        // Если группа включена, показываем нормальное состояние
+        if (isVisible) {
+            eyeIcon = `<span style="color: var(--accent-green);">${getIconEye()}</span>`;
+        } else {
+            eyeIcon = getIconEyeOff();
+            eyeClass = 'hidden';
+        }
+    }
+
     wrapper.innerHTML = `
         <div class="form__user-header">
-            <div class="form__drag-handle-user" title="Перетащите, чтобы изменить порядок">${getIconDrag()}</div>
-            <button type="button" class="btn_icon eye-btn ${isVisible ? '' : 'hidden'}" title="${isVisible ? 'Скрыть' : 'Показать'}">
-                ${isVisible ? getIconEye() : getIconEyeOff()}
+            <div class="form__drag-handle-user" title="Перетащите, чтобы изменить порядок" style="cursor: grab; opacity: 0.5; margin-right: 8px;">${getIconDrag()}</div>
+            <button type="button" class="btn_icon eye-btn ${eyeClass}" title="${eyeDisabled ? 'Группа скрыта' : (isVisible ? 'Скрыть' : 'Показать')}" ${eyeDisabled ? 'disabled' : ''}>
+                ${eyeIcon}
             </button>
-            <input type="color" class="form__color" value="${user.color}" />
+            ${colorOrPlaceholder}
             <div class="form__username-wrapper">
                 <h2 class="form__username">${user.name}</h2>
                 <div class="form__username-tooltip">${user.name}</div>
@@ -69,23 +102,27 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
 
     oldContainer.replaceWith(wrapper);
 
-    wrapper.querySelector('.eye-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        user.isVisible = !user.isVisible;
-        scheduleSave(user.id, user, requestRender);
-        const eyeBtn = wrapper.querySelector('.eye-btn');
-        eyeBtn.innerHTML = user.isVisible ? getIconEye() : getIconEyeOff();
-        eyeBtn.classList.toggle('hidden', !user.isVisible);
-        updateCalendarVacations();
-    });
+    const eyeBtn = wrapper.querySelector('.eye-btn');
+    if (eyeBtn && !eyeDisabled) {
+        eyeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            user.isVisible = !user.isVisible;
+            scheduleSave(user.id, user, requestRender);
+            renderUserCard(user, requestRender, updateCalendarVacations);
+            updateCalendarVacations();
+        });
+    }
 
-    wrapper.querySelector('.form__color').addEventListener('change', (e) => {
-        e.stopPropagation();
-        user.color = e.target.value;
-        scheduleSave(user.id, user, requestRender);
-        renderUserCard(user, requestRender, updateCalendarVacations);
-        updateCalendarVacations();
-    });
+    const colorInput = wrapper.querySelector('.form__color');
+    if (colorInput) {
+        colorInput.addEventListener('change', (e) => {
+            e.stopPropagation();
+            user.color = e.target.value;
+            scheduleSave(user.id, user, requestRender);
+            renderUserCard(user, requestRender, updateCalendarVacations);
+            updateCalendarVacations();
+        });
+    }
 
     wrapper.querySelector('.form__username').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -122,7 +159,6 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
             vacDiv.className = `form__vacation`;
             vacDiv.dataset.id = vac.id;
 
-            // Функция для обновления валидации (без перерисовки)
             const updateValidation = () => {
                 const { isOverlap, isInvalid } = validateInternalOverlap(user, vac.id);
                 const externalOverlaps = getExternalOverlaps(user, vac, state.users);
@@ -196,7 +232,6 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
             vacList.appendChild(vacDiv);
         });
 
-        // ВОЗВРАЩАЕМ ПЕРЕТАСКИВАНИЕ ОТПУСКОВ
         if (typeof Sortable !== 'undefined') {
             new Sortable(vacList, {
                 animation: 150,

@@ -1,4 +1,4 @@
-// scripts/app.js — v32 (Автовосстановление "Без группы")
+// scripts/app.js — ФИНАЛЬНЫЙ ФИКС ПРЫЖКОВ ГРУПП
 
 import { state, initState, stateEvents, getAvailableYears, updateGroup } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -12,7 +12,6 @@ const usersContainer = document.getElementById('users-container');
 
 const updateCalendarVacations = () => renderCalendarVacations(scheduleSave, requestRender, renderUserCard);
 
-// Восстанавливаем "Без группы", если её нет
 async function ensureUngroupedGroup() {
     const ungroupedDocRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", "ungrouped");
     const docSnap = await window.firestore.getDoc(ungroupedDocRef);
@@ -87,11 +86,18 @@ function requestRender() {
         const toggleBtn = groupHeader.querySelector('.toggle-group-btn');
         toggleBtn.textContent = isCollapsed ? '▼' : '▲';
 
-        toggleBtn.addEventListener('click', (e) => {
+        // СОХРАНЯЕМ СОСТОЯНИЕ СВОРАЧИВАНИЯ В БАЗУ
+        toggleBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const isHiddenNow = groupUsersContainer.style.display === 'none';
-            groupUsersContainer.style.display = isHiddenNow ? 'flex' : 'none';
-            e.target.textContent = isHiddenNow ? '▼' : '▲';
+            const newIsCollapsed = !group.isCollapsed;
+
+            // Меняем локально
+            group.isCollapsed = newIsCollapsed;
+            groupUsersContainer.style.display = newIsCollapsed ? 'none' : 'flex';
+            e.target.textContent = newIsCollapsed ? '▼' : '▲';
+
+            // Сохраняем в базу
+            await updateGroup(group.id, { isCollapsed: newIsCollapsed });
         });
 
         groupHeader.querySelector('.toggle-group-visibility').addEventListener('click', async (e) => {
@@ -150,11 +156,18 @@ function initGroupSortable() {
     });
 }
 
-// --- Перетаскивание сотрудников ---
+// --- Перетаскивание сотрудников (с защитой от утечек) ---
+let userSortableInstances = [];
+
 function initUserDragAndDrop() {
+    userSortableInstances.forEach(instance => {
+        if (instance && typeof instance.destroy === 'function') instance.destroy();
+    });
+    userSortableInstances = [];
+
     const containers = document.querySelectorAll('.group-users');
     containers.forEach(container => {
-        new Sortable(container, {
+        const sortable = new Sortable(container, {
             group: 'shared-users',
             animation: 150,
             handle: '.form__drag-handle-user',
@@ -175,6 +188,7 @@ function initUserDragAndDrop() {
                 }
             }
         });
+        userSortableInstances.push(sortable);
     });
 }
 
