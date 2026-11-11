@@ -178,6 +178,7 @@ function renderVacation(user, vac) {
         user.vacations = user.vacations.filter(v => v.id !== vac.id);
         scheduleSave(user.id, user);
         renderUserCard(user);
+        updateCalendarVacations();
     });
 
     return div;
