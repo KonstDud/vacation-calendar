@@ -1,7 +1,6 @@
 .content-main {
     width: 100%;
     overflow: visible;
-    /* Было hidden, теперь visible, чтобы тултип не обрезался */
 }
 
 .calendar {
@@ -170,10 +169,23 @@
     min-width: 140px;
 }
 
-.calendar__day[id^="dayid"]:hover .calendar__tooltip {
+/* Невидимая "дорожка" для мышки */
+.calendar__tooltip::before {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 0;
+    right: 0;
+    height: 12px;
+    background: transparent;
+}
+
+.calendar__day[id^="dayid"]:hover .calendar__tooltip,
+.calendar__tooltip:hover {
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(-4px);
+    pointer-events: auto;
 }
 
 .calendar__tooltip-item {
@@ -183,6 +195,7 @@
     font-size: 13px;
     color: var(--text-primary);
     white-space: nowrap;
+    pointer-events: auto;
 }
 
 .calendar__tooltip-dot {
@@ -190,4 +203,51 @@
     height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
+}
+
+/* Кнопка удаления в тултипе */
+.calendar__tooltip-delete {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 2px;
+    margin-left: auto;
+    border-radius: 3px;
+    transition: all 0.2s;
+    opacity: 0.7;
+}
+
+.calendar__tooltip-delete:hover {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.2);
+    opacity: 1;
+}
+
+/* --- Подсветка при наведении на имя в тултипе --- */
+.calendar__day--highlighted {
+    background: rgba(59, 130, 246, 0.3) !important;
+    border: 1px solid var(--accent-blue) !important;
+}
+
+/* --- Подсветка при наведении на крестик (удаление) --- */
+.calendar__day--to-delete {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border: 1px solid var(--accent-red) !important;
+    animation: pulse-red 1s infinite;
+}
+
+@keyframes pulse-red {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
 }

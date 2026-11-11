@@ -1,4 +1,4 @@
-// scripts/app.js — v2 (С отдельными таймерами и флагом localEditing)
+// scripts/app.js — v2 (С подсветкой при наведении)
 
 import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -6,17 +6,14 @@ import { initCalendarInteractions } from './calendar-interactions.js';
 import { html, render } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/lit-html.js';
 import { repeat } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/directives/repeat.js';
 
-// Таймеры для каждого пользователя отдельно
 const saveTimeouts = {};
 
 const getUserDoc = (year, userId) => window.firestore.doc(window.db, "vacationData_v2", String(year), "users", userId);
 const getUsersCollection = (year) => window.firestore.collection(window.db, "vacationData_v2", String(year), "users");
 
 const scheduleSave = (userId, userData) => {
-    // Ставим флаг, что мы сейчас изменяем данные — onSnapshot не будет вмешиваться
     state._localEditing = true;
 
-    // Очищаем таймер ТОЛЬКО для этого пользователя
     if (saveTimeouts[userId]) {
         clearTimeout(saveTimeouts[userId]);
     }
@@ -29,10 +26,8 @@ const scheduleSave = (userId, userData) => {
             console.error('[app] Ошибка сохранения:', e);
         } finally {
             delete saveTimeouts[userId];
-            // Снимаем флаг, только если больше нет активных таймеров
             if (Object.keys(saveTimeouts).length === 0) {
                 state._localEditing = false;
-                // Применяем отложенные обновления, если они были
                 if (state._pendingRemote) {
                     state.users = state._pendingRemote;
                     state._pendingRemote = null;
@@ -340,7 +335,7 @@ function updateCalendarVacations() {
 
             for (let i = startIndex; i <= endIndex; i++) {
                 if (!dayData[i]) dayData[i] = [];
-                dayData[i].push({ name: user.name, color: user.color });
+                dayData[i].push({ name: user.name, color: user.color, userId: user.id, vacId: vac.id, startIndex, endIndex });
             }
         });
     });
@@ -370,7 +365,45 @@ function updateCalendarVacations() {
             dot.style.backgroundColor = person.color;
             const name = document.createElement('span');
             name.textContent = person.name;
-            item.append(dot, name);
+            const delBtn = document.createElement('button');
+            delBtn.classList.add('calendar__tooltip-delete');
+            delBtn.innerHTML = '✕';
+            delBtn.title = 'Удалить отпуск';
+
+            // Подсветка при наведении на имя
+            item.addEventListener('mouseenter', () => {
+                for (let i = person.startIndex; i <= person.endIndex; i++) {
+                    const d = document.getElementById(`dayid_${i}`);
+                    if (d) d.classList.add('calendar__day--highlighted');
+                }
+            });
+            item.addEventListener('mouseleave', () => {
+                document.querySelectorAll('.calendar__day--highlighted').forEach(d => d.classList.remove('calendar__day--highlighted'));
+            });
+
+            // Подсветка при наведении на крестик
+            delBtn.addEventListener('mouseenter', () => {
+                for (let i = person.startIndex; i <= person.endIndex; i++) {
+                    const d = document.getElementById(`dayid_${i}`);
+                    if (d) d.classList.add('calendar__day--to-delete');
+                }
+            });
+            delBtn.addEventListener('mouseleave', () => {
+                document.querySelectorAll('.calendar__day--to-delete').forEach(d => d.classList.remove('calendar__day--to-delete'));
+            });
+
+            delBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const u = state.users.find(u => u.id === person.userId);
+                if (!u) return;
+                u.vacations = u.vacations.filter(v => v.id !== person.vacId);
+                scheduleSave(u.id, u);
+                updateCalendarVacations();
+                const card = document.getElementById(`user-card-${u.id}`);
+                if (card) renderUserCard(u);
+            });
+
+            item.append(dot, name, delBtn);
             tooltip.appendChild(item);
         });
 
@@ -415,6 +448,40 @@ function initSortableUsers() {
     });
 }
 
+// --- Безопасный сброс ---
+let resetConfirmMode = false;
+let resetTimeout = null;
+
+const resetBtn = document.getElementById('btn-reset');
+const originalResetText = resetBtn.textContent;
+
+resetBtn.addEventListener('click', async () => {
+    if (!resetConfirmMode) {
+        resetConfirmMode = true;
+        resetBtn.textContent = 'Вы уверены? Нажмите еще раз';
+        resetBtn.classList.add('danger-active');
+
+        clearTimeout(resetTimeout);
+        resetTimeout = setTimeout(() => {
+            resetConfirmMode = false;
+            resetBtn.textContent = originalResetText;
+            resetBtn.classList.remove('danger-active');
+        }, 5000);
+        return;
+    }
+
+    clearTimeout(resetTimeout);
+    resetConfirmMode = false;
+    resetBtn.textContent = originalResetText;
+    resetBtn.classList.remove('danger-active');
+
+    for (const u of state.users) {
+        await window.firestore.deleteDoc(getUserDoc(state.year, u.id));
+    }
+    state.users = [];
+    requestRender();
+});
+
 // --- Инициализация ---
 
 stateEvents.addEventListener('statechange', () => {
@@ -449,15 +516,6 @@ document.getElementById('btn-add-user').addEventListener('click', () => {
     state.users = [...state.users, newUser];
     requestRender();
     window.firestore.setDoc(newDocRef, newUser).catch(console.error);
-});
-
-document.getElementById('btn-reset').addEventListener('click', async () => {
-    if (!confirm('Точно удалить всех пользователей за этот год?')) return;
-    for (const u of state.users) {
-        await window.firestore.deleteDoc(getUserDoc(state.year, u.id));
-    }
-    state.users = [];
-    requestRender();
 });
 
 document.getElementById('btn-logout').addEventListener('click', () => {

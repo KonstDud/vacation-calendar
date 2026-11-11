@@ -15,8 +15,6 @@ export function initCalendarInteractions() {
         const dayIndex = parseInt(dayDiv.id.replace('dayid_', ''), 10);
         if (!dayIndex) return;
 
-        // УБРАЛИ ПРОВЕРКУ НА ТУЛТИП. Теперь можно кликать по занятым дням.
-
         if (selectionStart === null) {
             selectionStart = dayIndex;
             highlightRange(selectionStart, selectionStart);
@@ -25,8 +23,6 @@ export function initCalendarInteractions() {
 
         let start = Math.min(selectionStart, dayIndex);
         let end = Math.max(selectionStart, dayIndex);
-
-        // Убрали глобальную проверку на пересечение. Проверяем только при сохранении.
 
         highlightRange(start, end);
 
@@ -58,6 +54,26 @@ function clearSelection() {
     selectionStart = null;
 }
 
+// Функция для поиска отпусков в выбранном диапазоне
+function getVacationsInRange(startIdx, endIdx) {
+    const result = [];
+    state.users.forEach(user => {
+        (user.vacations || []).forEach(vac => {
+            if (!vac.startDate || !vac.endDate) return;
+            const dStart = new Date(vac.startDate);
+            const dEnd = new Date(vac.endDate);
+            const yearStart = new Date(state.year, 0, 1);
+            const vStart = Math.floor((dStart - yearStart) / (1000 * 3600 * 24)) + 1;
+            const vEnd = Math.floor((dEnd - yearStart) / (1000 * 3600 * 24)) + 1;
+
+            if (startIdx <= vEnd && endIdx >= vStart) {
+                result.push({ user, vac });
+            }
+        });
+    });
+    return result;
+}
+
 function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
     const popup = document.querySelector('.popup');
     const popupTitle = popup.querySelector('.popup__title');
@@ -67,19 +83,45 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
     const displayStart = startStr.split('-').reverse().join('.');
     const displayEnd = endStr.split('-').reverse().join('.');
 
-    popupTitle.textContent = `Оформить отпуск`;
+    const existingVacations = getVacationsInRange(startIdx, endIdx);
+
+    popupTitle.textContent = `Период: ${displayStart} — ${displayEnd} (${totalDays} дн.)`;
+
+    let existingHTML = '';
+    if (existingVacations.length > 0) {
+        existingHTML = `
+            <div class="popup__existing-vacations">
+                <div class="popup__existing-title">Уже в отпуске:</div>
+                ${existingVacations.map(({ user, vac }) => {
+            // Форматируем даты отпуска для отображения
+            const vacStart = new Date(vac.startDate);
+            const vacEnd = new Date(vac.endDate);
+            const startStrShort = `${String(vacStart.getDate()).padStart(2, '0')}.${String(vacStart.getMonth() + 1).padStart(2, '0')}`;
+            const endStrShort = `${String(vacEnd.getDate()).padStart(2, '0')}.${String(vacEnd.getMonth() + 1).padStart(2, '0')}`;
+            return `
+                        <div class="popup__existing-item" data-vac-id="${vac.id}" data-user-id="${user.id}">
+                            <div class="popup__existing-dot" style="background: ${user.color};"></div>
+                            <span class="popup__existing-name">${user.name} <span class="popup__existing-dates">(${startStrShort} – ${endStrShort})</span></span>
+                            <button type="button" class="popup__existing-delete" title="Удалить этот отпуск">✕</button>
+                        </div>
+                    `;
+        }).join('')}
+            </div>
+        `;
+    }
 
     popupContent.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-            <div style="font-size: 14px; color: var(--text-primary); text-align: center; margin-bottom: 8px;">
-                Период: <b>${displayStart} — ${displayEnd}</b> (${totalDays} дн.)
-            </div>
-
+        ${existingHTML}
+        
+        <div class="popup__add-form">
+            <div class="popup__add-title">${existingVacations.length > 0 ? 'Добавить еще один отпуск' : 'Оформить отпуск'}</div>
             <label style="font-size: 13px; color: var(--text-muted);">Выберите сотрудника</label>
-            <select id="popup-user-select" class="form__date" style="padding: 10px; font-size: 14px; background: var(--bg-main); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px;">
-                <option value="">-- Выберите --</option>
-                ${state.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('')}
-            </select>
+            <div class="select-wrapper">
+                <select id="popup-user-select" class="form__date">
+                    <option value="">-- Выберите --</option>
+                    ${state.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('')}
+                </select>
+            </div>
             <div id="popup-error" style="color: var(--accent-red); font-size: 12px; display: none;"></div>
 
             <button id="popup-save-btn" class="btn btn_add" style="margin-top: 8px;">Добавить отпуск</button>
@@ -101,6 +143,28 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
     };
     popup.addEventListener('mousedown', onMouseDown);
 
+    popupContent.querySelectorAll('.popup__existing-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const item = e.target.closest('.popup__existing-item');
+            const vacId = item.dataset.vacId;
+            const userId = item.dataset.userId;
+            const user = state.users.find(u => u.id === userId);
+            if (!user) return;
+
+            user.vacations = user.vacations.filter(v => v.id !== vacId);
+
+            try {
+                const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "users", userId);
+                const { id, ...dataToSave } = user;
+                await window.firestore.setDoc(docRef, dataToSave, { merge: true });
+                window.dispatchEvent(new Event('statechange'));
+                item.remove();
+            } catch (error) {
+                console.error('Ошибка удаления:', error);
+            }
+        });
+    });
+
     const saveBtn = document.getElementById('popup-save-btn');
     saveBtn.onclick = async () => {
         const userId = document.getElementById('popup-user-select').value;
@@ -116,7 +180,6 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
         const user = state.users.find(u => u.id === userId);
         if (!user) return;
 
-        // Проверяем пересечение ИМЕННО У ЭТОГО СОТРУДНИКА
         let userOverlap = false;
         (user.vacations || []).forEach(vac => {
             if (!vac.startDate || !vac.endDate) return;
