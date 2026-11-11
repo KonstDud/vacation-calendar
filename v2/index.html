@@ -55,7 +55,19 @@
             <section class="content-side">
                 <div class="side-header">
                     <h2 class="side-title">Сотрудники</h2>
-                    <button type="button" class="btn btn_add" id="btn-add-user">+ Добавить</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn_icon btn_manage-groups" id="btn-manage-groups"
+                            title="Управление группами">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path
+                                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                                </path>
+                            </svg>
+                        </button>
+                        <button type="button" class="btn btn_add" id="btn-add-user">+ Добавить</button>
+                    </div>
                 </div>
 
                 <div id="users-container"></div>
@@ -71,11 +83,28 @@
         </main>
     </div>
 
+    <!-- Основной попап для календаря -->
     <div class="popup">
         <div class="popup__container" id="popup__container">
             <h2 class="popup__title">Дата</h2>
             <div class="popup__content"></div>
             <button type="button" class="popup__close-button" aria-label="Закрыть" title="Закрыть"></button>
+        </div>
+    </div>
+
+    <!-- НОВЫЙ ПОПАП: Управление группами -->
+    <div class="popup" id="groups-popup">
+        <div class="popup__container" style="width: 380px; max-width: 90%;">
+            <h2 class="popup__title">Управление группами</h2>
+            <div class="popup__content" id="groups-popup-content"
+                style="max-height: 60vh; overflow-y: auto; padding-right: 4px;">
+                <!-- Здесь будет список групп -->
+            </div>
+            <button type="button" class="btn btn_add" id="btn-create-group" style="width: 100%; margin-top: 8px;">
+                + Создать группу
+            </button>
+            <button type="button" class="popup__close-button" id="groups-popup-close" aria-label="Закрыть"
+                title="Закрыть"></button>
         </div>
     </div>
 

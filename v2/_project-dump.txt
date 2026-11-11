@@ -1,3 +1,75 @@
+=== ИНСТРУКЦИЯ ДЛЯ НЕЙРОСЕТИ ===
+1. Это проект 'График отпусков v2'.
+2. РАБОТАЕМ ТОЛЬКО В ПАПКЕ 'v2'. НЕ ТРОГАЕМ корень и папку '2027'.
+3. Данные хранятся в Firebase (Firestore). Коллекция: vacationData_v2/{year}/users.
+4. У нас есть общая авторизация через пароль (login.html). Ролей пока нет.
+5. Архитектура: index.html (интерфейс), app.js (логика DOM), state.js (данные и onSnapshot), calendar.js (сетка), calendar-interactions.js (клики по дням).
+6. Стили разделены на 01-base.css, 02-layout.css, 03-components.css, 04-calendar.css, 05-popup.css.
+7. Не используем React/Vue, только чистый JS + lit-html для некоторых частей, и SortableJS.
+8. Текущая задача: добавление групп сотрудников, фильтрация, производительность для 50+ человек.
+
+=== ПЛАН НА БУДУЩЕЕ (что мы обсуждали) ===
+1. Группы: добавить коллекцию 'groups' в Firebase. В левой панели сделать фильтр по группам (выпадающий список). В модалке управления группами (создать, переименовать, удалить, выбрать цвет) сделать переключатель 'Показывать на календаре' для всей группы.
+2. Производительность: по умолчанию все карточки сотрудников свернуты (показывают только имя). Виртуализация списка или ленивая загрузка (IntersectionObserver) для 50+ человек.
+3. Точки на календаре: если больше 3 отпускников в один день, показывать 3 точки и текст '+N'.
+4. Роли (следующая задача): при входе спрашивать 'Кто вы?' и запоминать в sessionStorage. Админ видит все кнопки (удалить, добавить, сброс). Обычный сотрудник может редактировать только себя.
+
+=== ИСХОДНЫЙ КОД ===
+
+================================================================================
+FILE: firebase-config.js
+================================================================================
+// firebase-config.js
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import {
+    initializeFirestore, // <--- Используем новый метод
+    collection,
+    doc,
+    setDoc,
+    getDoc,
+    getDocs,
+    deleteDoc,
+    onSnapshot,
+    query,
+    orderBy,           // <--- ДОБАВИЛИ
+    runTransaction,
+    persistentLocalCache // <--- НОВЫЙ КЭШ
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyAZTTvp4KIf_j5Dop59SIW6n8X2GBZvZE0",
+    authDomain: "vacation-calendar-2026.firebaseapp.com",
+    projectId: "vacation-calendar-2026",
+    storageBucket: "vacation-calendar-2026.firebasestorage.app",
+    messagingSenderId: "619665470112",
+    appId: "1:619665470112:web:d4679b0d4d1694c38c8fc5",
+};
+
+const app = initializeApp(firebaseConfig);
+
+// Инициализируем Firestore с правильным локальным кэшем
+const db = initializeFirestore(app, {
+    localCache: persistentLocalCache()
+});
+
+window.db = db;
+window.firestore = {
+    collection,
+    doc,
+    setDoc,
+    getDoc,
+    getDocs,
+    deleteDoc,
+    onSnapshot,
+    query,
+    orderBy,
+    runTransaction,
+};
+
+window.firebaseReady = Promise.resolve(db);
+
+export { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, runTransaction };
+
 ================================================================================
 FILE: index.html
 ================================================================================
@@ -7,6 +79,9 @@ FILE: index.html
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./vendor/normalize.css" />
     <link rel="stylesheet" href="./style.css" />
     <title>График отпусков</title>
@@ -19,55 +94,70 @@ FILE: index.html
         }
     </script>
 
-    <header class="header">
-        <h1 class="header__title" id="header-title">График отпусков</h1>
-    </header>
+    <div class="container">
+        <header class="header">
+            <div class="header__brand">
+                <div class="header__logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 256 256">
+                        <rect width="256" height="256" fill="none" />
+                        <rect x="32" y="48" width="192" height="160" rx="8" opacity="0.2" fill="#ffffff" />
+                        <rect x="32" y="48" width="192" height="160" rx="8" fill="none" stroke="#ffffff"
+                            stroke-linecap="round" stroke-linejoin="round" stroke-width="16" />
+                        <line x1="176" y1="24" x2="176" y2="56" fill="none" stroke="#ffffff" stroke-linecap="round"
+                            stroke-linejoin="round" stroke-width="16" />
+                        <line x1="80" y1="24" x2="80" y2="56" fill="none" stroke="#ffffff" stroke-linecap="round"
+                            stroke-linejoin="round" stroke-width="16" />
+                        <line x1="32" y1="88" x2="224" y2="88" fill="none" stroke="#ffffff" stroke-linecap="round"
+                            stroke-linejoin="round" stroke-width="16" />
+                        <path d="M176,136a24,24,0,1,1-24-24A24,24,0,0,1,176,136Z" opacity="0.2" fill="#ffffff" />
+                        <path d="M128,136a24,24,0,1,1-24-24A24,24,0,0,1,128,136Z" opacity="0.2" fill="#ffffff" />
+                        <path d="M80,184a24,24,0,1,1-24-24A24,24,0,0,1,80,184Z" opacity="0.2" fill="#ffffff" />
+                    </svg>
+                </div>
+                <div class="header__titles">
+                    <h1 class="header__title" id="header-title">График отпусков</h1>
+                    <span class="header__badge" id="header-year">2027</span>
+                </div>
+            </div>
 
-    <main class="content">
-        <section class="content-side">
-            <!-- Lit-html будет рендерить список пользователей сюда -->
-            <div id="users-container"></div>
+            <div class="header__actions">
+                <select id="year-select" class="year-select"></select>
+                <button type="button" class="btn btn_logout" id="btn-logout">Выйти</button>
+            </div>
+        </header>
 
-            <input type="button" class="form__button form__button_type_user-add" value="Добавить пользователя" />
-            <input type="button" class="form__button form__button_type_reset" value="Сброс" />
-            <input type="button" class="form__button form__button_type_logout" value="Выйти" />
-        </section>
+        <main class="content">
+            <section class="content-side">
+                <div class="side-header">
+                    <h2 class="side-title">Сотрудники</h2>
+                    <button type="button" class="btn btn_add" id="btn-add-user">+ Добавить</button>
+                </div>
 
-        <section class="content-main">
-            <div class="calendar"></div>
-        </section>
-    </main>
+                <div id="users-container"></div>
 
-    <footer class="footer">
-        <p class="footer__copyright">K. 2026</p>
-        <a class="footer__link" href="https://github.com/KonstDud/vacation-calendar" target="_blank"
-            rel="noopener noreferrer">Github</a>
-    </footer>
+                <div class="side-footer">
+                    <button type="button" class="btn_link" id="btn-reset">Сбросить всё</button>
+                </div>
+            </section>
 
-    <!-- Попап пока оставим как есть, вернемся к нему позже -->
+            <section class="content-main">
+                <div class="calendar" id="calendar-container"></div>
+            </section>
+        </main>
+    </div>
+
     <div class="popup">
         <div class="popup__container" id="popup__container">
             <h2 class="popup__title">Дата</h2>
             <div class="popup__content"></div>
-            <button type="button" class="popup__close-button" aria-label="Закрыть"></button>
+            <button type="button" class="popup__close-button" aria-label="Закрыть" title="Закрыть"></button>
         </div>
     </div>
 
-    <!-- Firebase (должен быть до app.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
     <script type="module" src="./firebase-config.js"></script>
-
-    <!-- Главный скрипт -->
     <script type="module" src="./scripts/app.js"></script>
-
-    <script>
-        const btnLogout = document.querySelector('.form__button_type_logout');
-        if (btnLogout) {
-            btnLogout.addEventListener('click', () => {
-                sessionStorage.removeItem('vacationAuth');
-                window.location.href = 'login.html';
-            });
-        }
-    </script>
 </body>
 
 </html>
@@ -211,173 +301,506 @@ FILE: login.html
 ================================================================================
 FILE: scripts\app.js
 ================================================================================
-// scripts/app.js — v2 (Lit-html + исправленные отпуска)
+// scripts/app.js — v2 (С подсветкой при наведении)
 
-import { state, initState, stateEvents } from './state.js';
+import { state, initState, stateEvents, setYear, getAvailableYears } from './state.js';
 import { renderCalendar } from './calendar.js';
+import { initCalendarInteractions } from './calendar-interactions.js';
 import { html, render } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/lit-html.js';
+import { repeat } from 'https://cdn.jsdelivr.net/npm/lit-html@3.1.2/directives/repeat.js';
 
-let saveTimeout;
+const saveTimeouts = {};
 
 const getUserDoc = (year, userId) => window.firestore.doc(window.db, "vacationData_v2", String(year), "users", userId);
 const getUsersCollection = (year) => window.firestore.collection(window.db, "vacationData_v2", String(year), "users");
 
 const scheduleSave = (userId, userData) => {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
+    state._localEditing = true;
+
+    if (saveTimeouts[userId]) {
+        clearTimeout(saveTimeouts[userId]);
+    }
+
+    saveTimeouts[userId] = setTimeout(async () => {
         try {
             const { id, ...dataToSave } = userData;
             await window.firestore.setDoc(getUserDoc(state.year, userId), dataToSave, { merge: true });
-            console.log(`[app] Сохранен: ${userId}`);
         } catch (e) {
             console.error('[app] Ошибка сохранения:', e);
+        } finally {
+            delete saveTimeouts[userId];
+            if (Object.keys(saveTimeouts).length === 0) {
+                state._localEditing = false;
+                if (state._pendingRemote) {
+                    state.users = state._pendingRemote;
+                    state._pendingRemote = null;
+                    requestRender();
+                }
+            }
         }
     }, 800);
 };
 
-// --- Lit-html Шаблоны ---
+// --- Утилиты ---
+const getCalendarDays = (startStr, endStr) => {
+    if (!startStr || !endStr) return 0;
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    if (end < start) return 0;
+    return Math.floor((end - start) / (1000 * 3600 * 24)) + 1;
+};
 
-const vacationTemplate = (user, vac) => html`
-    <div class="form__vacation" id="${vac.id}">
-        <input 
-            type="date" 
-            class="form__date form__date_type_start" 
-            .value=${vac.startDate} 
-            @change=${(e) => {
+const getWorkingDays = (startStr, endStr) => {
+    if (!startStr || !endStr) return 0;
+    let count = 0;
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    if (end < start) return 0;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dayOfWeek = d.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+    }
+    return count;
+};
+
+const validateInternalOverlap = (user, currentVacId) => {
+    const vacs = user.vacations || [];
+    const target = vacs.find(v => v.id === currentVacId);
+    if (!target) return { isOverlap: false, isInvalid: false };
+
+    if (target.startDate && target.endDate && target.endDate < target.startDate) {
+        return { isOverlap: false, isInvalid: true };
+    }
+
+    const isOverlap = vacs.some(v => {
+        if (v.id === currentVacId) return false;
+        if (!v.startDate || !v.endDate || !target.startDate || !target.endDate) return false;
+
+        const vStart = parseInt(v.startDate.replace(/-/g, ''), 10);
+        const vEnd = parseInt(v.endDate.replace(/-/g, ''), 10);
+        const tStart = parseInt(target.startDate.replace(/-/g, ''), 10);
+        const tEnd = parseInt(target.endDate.replace(/-/g, ''), 10);
+
+        return tStart <= vEnd && vStart <= tEnd;
+    });
+
+    return { isOverlap, isInvalid: false };
+};
+
+const getExternalOverlaps = (currentUser, currentVac) => {
+    if (!currentVac.startDate || !currentVac.endDate) return [];
+    if (currentVac.endDate < currentVac.startDate) return [];
+
+    const tStart = parseInt(currentVac.startDate.replace(/-/g, ''), 10);
+    const tEnd = parseInt(currentVac.endDate.replace(/-/g, ''), 10);
+    const overlaps = [];
+
+    state.users.forEach(otherUser => {
+        if (otherUser.id === currentUser.id) return;
+        if (otherUser.isVisible === false) return;
+
+        (otherUser.vacations || []).forEach(otherVac => {
+            if (!otherVac.startDate || !otherVac.endDate) return;
+
+            const oStart = parseInt(otherVac.startDate.replace(/-/g, ''), 10);
+            const oEnd = parseInt(otherVac.endDate.replace(/-/g, ''), 10);
+
+            if (tStart <= oEnd && oStart <= tEnd) {
+                if (!overlaps.find(o => o.name === otherUser.name)) {
+                    overlaps.push({ name: otherUser.name, color: otherUser.color });
+                }
+            }
+        });
+    });
+
+    return overlaps;
+};
+
+const countDaysFromYearStart = (dateStr) => {
+    if (!dateStr) return 0;
+    const d = new Date(dateStr);
+    const yearStart = new Date(state.year, 0, 1);
+    return Math.floor((d - yearStart) / (1000 * 3600 * 24)) + 1;
+};
+
+// --- SVG Иконки ---
+const getIconEye = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const getIconEyeOff = () => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+const getIconWarning = () => `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+const getIconDrag = () => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor: grab; opacity: 0.5;"><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>`;
+
+// --- Ручной рендер отпусков ---
+function renderVacation(user, vac) {
+    const calDays = getCalendarDays(vac.startDate, vac.endDate);
+    const workDays = getWorkingDays(vac.startDate, vac.endDate);
+    const { isOverlap, isInvalid } = validateInternalOverlap(user, vac.id);
+    const externalOverlaps = getExternalOverlaps(user, vac);
+    const hasError = isOverlap || isInvalid;
+    const crossTitle = externalOverlaps.map(o => o.name).join(', ');
+
+    const div = document.createElement('div');
+    div.className = `form__vacation ${hasError ? 'form__vacation_overlap' : ''}`;
+    div.dataset.id = vac.id;
+    div.innerHTML = `
+        <div class="form__vacation-dates">
+            <div class="form__drag-handle" title="Перетащите, чтобы изменить порядок">${getIconDrag()}</div>
+            <input type="date" class="form__date" value="${vac.startDate || ''}" />
+            <span class="form__date-sep">—</span>
+            <input type="date" class="form__date" value="${vac.endDate || ''}" />
+        </div>
+        <div class="form__vacation-info">
+            <span>${calDays} кал. / ${workDays} раб.</span>
+            <button type="button" class="btn_icon delete" title="Удалить отпуск">✕</button>
+        </div>
+        ${isInvalid ? `<div class="form__vacation-alert">${getIconWarning()} Дата окончания раньше даты начала!</div>` : ''}
+        ${isOverlap ? `<div class="form__vacation-alert">${getIconWarning()} Пересечение с другим отпуском этого сотрудника!</div>` : ''}
+        ${externalOverlaps.length > 0 ? `<div class="form__vacation-cross-alert" title="Пересекается с: ${crossTitle}">${getIconWarning()} <span class="form__vacation-cross-text">Пересекается с: ${externalOverlaps.map((o, i) => `<span class="form__vacation-cross-name" style="color: ${o.color}">${o.name}${i < externalOverlaps.length - 1 ? ', ' : ''}</span>`).join('')}</span></div>` : ''}
+    `;
+
+    const inputs = div.querySelectorAll('input[type="date"]');
+    inputs[0].addEventListener('change', (e) => {
         vac.startDate = e.target.value;
         scheduleSave(user.id, user);
-        requestRender();
-    }} 
-        />
-        <input 
-            type="date" 
-            class="form__date form__date_type_end" 
-            .value=${vac.endDate} 
-            @change=${(e) => {
+        updateCalendarVacations();
+        renderUserCard(user);
+    });
+    inputs[1].addEventListener('change', (e) => {
         vac.endDate = e.target.value;
         scheduleSave(user.id, user);
-        requestRender();
-    }} 
-        />
-        <button 
-            type="button" 
-            class="form__button form__button_type_vac-del"
-            @click=${() => {
+        updateCalendarVacations();
+        renderUserCard(user);
+    });
+
+    div.querySelector('.btn_icon.delete').addEventListener('click', (e) => {
+        e.stopPropagation();
         user.vacations = user.vacations.filter(v => v.id !== vac.id);
         scheduleSave(user.id, user);
-        requestRender();
-    }}
-        >✕</button>
-    </div>
-`;
+        renderUserCard(user);
+        updateCalendarVacations();
+    });
 
-const userTemplate = (user) => html`
-    <div class="form__user" id="${user.id}">
+    return div;
+}
+
+// --- Ручной рендер карточки ---
+function renderUserCard(user) {
+    const oldContainer = document.getElementById(`user-card-${user.id}`);
+    if (!oldContainer) return;
+
+    const isVisible = user.isVisible !== false;
+    const isHidden = user.isHidden === true;
+    const displayVacations = user.vacations || [];
+
+    let totalCalDays = 0;
+    let totalWorkDays = 0;
+    displayVacations.forEach(vac => {
+        if (vac.startDate && vac.endDate && vac.endDate >= vac.startDate) {
+            totalCalDays += getCalendarDays(vac.startDate, vac.endDate);
+            totalWorkDays += getWorkingDays(vac.startDate, vac.endDate);
+        }
+    });
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `form__user ${isHidden ? 'form__user_hidden' : ''}`;
+    wrapper.id = `user-card-${user.id}`;
+    wrapper.style = isHidden ? `border-left-color: ${user.color};` : '';
+
+    wrapper.innerHTML = `
         <div class="form__user-header">
-            <input 
-                type="text" 
-                class="form__username" 
-                .value=${user.name} 
-                placeholder="Имя"
-                @input=${(e) => {
-        user.name = e.target.value;
+            <div class="form__drag-handle-user" title="Перетащите, чтобы изменить порядок" style="cursor: grab; opacity: 0.5; margin-right: 8px;">${getIconDrag()}</div>
+            <button type="button" class="btn_icon eye-btn ${isVisible ? '' : 'hidden'}" title="${isVisible ? 'Скрыть с календаря' : 'Показать на календаре'}">
+                ${isVisible ? getIconEye() : getIconEyeOff()}
+            </button>
+            <input type="color" class="form__color" value="${user.color}" style="${isHidden ? 'display: none;' : ''}" />
+            <div class="form__username-wrapper">
+                <h2 class="form__username">${user.name}</h2>
+                ${!isHidden ? `<div class="form__username-tooltip">${user.name}</div>` : ''}
+            </div>
+            <div class="form__user-actions">
+                <button type="button" class="btn_icon toggle-btn" title="${isHidden ? 'Развернуть' : 'Свернуть'}">${isHidden ? '▼' : '▲'}</button>
+                <button type="button" class="btn_icon delete-user-btn" title="Удалить">✕</button>
+            </div>
+        </div>
+        ${!isHidden ? `
+            <div class="form__vacations-list" id="vacations-list-${user.id}"></div>
+            <button type="button" class="btn btn_small add-vac-btn">+ Добавить отпуск</button>
+            ${displayVacations.length > 0 ? `
+                <div class="form__user-totals">
+                    <span>Итого календарных: <b>${totalCalDays}</b></span>
+                    <span>Итого рабочих: <b>${totalWorkDays}</b></span>
+                </div>
+            ` : ''}
+        ` : ''}
+    `;
+
+    oldContainer.replaceWith(wrapper);
+
+    wrapper.querySelector('.eye-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        user.isVisible = !user.isVisible;
         scheduleSave(user.id, user);
-    }} 
-            />
-            <input 
-                type="color" 
-                class="form__color" 
-                .value=${user.color} 
-                @input=${(e) => {
+        const eyeBtn = wrapper.querySelector('.eye-btn');
+        eyeBtn.innerHTML = user.isVisible ? getIconEye() : getIconEyeOff();
+        eyeBtn.classList.toggle('hidden', !user.isVisible);
+        eyeBtn.title = user.isVisible ? 'Скрыть с календаря' : 'Показать на календаре';
+        updateCalendarVacations();
+    });
+
+    wrapper.querySelector('.form__color').addEventListener('change', (e) => {
+        e.stopPropagation();
         user.color = e.target.value;
         scheduleSave(user.id, user);
-        requestRender();
-    }} 
-            />
-            <button 
-                type="button" 
-                class="form__button form__button_type_vac-add"
-                @click=${() => {
-        if (!user.vacations) user.vacations = [];
-        user.vacations.push({
-            id: `vacationid_${Date.now()}`,
-            startDate: `${state.year}-06-01`,
-            endDate: `${state.year}-06-14`
-        });
+        renderUserCard(user);
+    });
+
+    wrapper.querySelector('.form__username').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const newName = prompt('Введите новое имя:', user.name);
+        if (newName) { user.name = newName; scheduleSave(user.id, user); renderUserCard(user); }
+    });
+
+    wrapper.querySelector('.toggle-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        user.isHidden = !user.isHidden;
         scheduleSave(user.id, user);
-        requestRender();
-    }}
-            >+ Отпуск</button>
-            <button 
-                type="button" 
-                class="form__button form__button_type_user-del"
-                @click=${() => {
+        renderUserCard(user);
+    });
+
+    wrapper.querySelector('.delete-user-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
         if (confirm(`Удалить ${user.name}?`)) {
             state.users = state.users.filter(u => u.id !== user.id);
             window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
             requestRender();
         }
-    }}
-            >✕</button>
-        </div>
-        <div class="form__vacations-list">
-            ${(user.vacations || []).map(vac => vacationTemplate(user, vac))}
-        </div>
-    </div>
-`;
+    });
 
-const usersListTemplate = () => html`
-    <form class="form">
-        ${state.users.map(user => userTemplate(user))}
-    </form>
-`;
+    if (!isHidden) {
+        const vacList = wrapper.querySelector('.form__vacations-list');
+        displayVacations.forEach(vac => {
+            vacList.appendChild(renderVacation(user, vac));
+        });
+
+        wrapper.querySelector('.add-vac-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!user.vacations) user.vacations = [];
+            user.vacations.push({ id: `vacationid_${Date.now()}`, startDate: `${state.year}-01-01`, endDate: `${state.year}-01-01` });
+            scheduleSave(user.id, user);
+            renderUserCard(user);
+        });
+
+        new Sortable(vacList, {
+            animation: 150,
+            handle: '.form__drag-handle',
+            ghostClass: 'form__vacation-sortable-ghost',
+            onEnd: async function (evt) {
+                if (evt.oldIndex === evt.newIndex) return;
+                const vacs = [...user.vacations];
+                const movedVac = vacs.splice(evt.oldIndex, 1)[0];
+                vacs.splice(evt.newIndex, 0, movedVac);
+                user.vacations = vacs;
+                scheduleSave(user.id, user);
+            }
+        });
+    }
+}
 
 // --- Логика рендера ---
 
 const usersContainer = document.getElementById('users-container');
 
 function requestRender() {
-    render(usersListTemplate(), usersContainer);
+    usersContainer.replaceChildren();
+    state.users.forEach(user => {
+        const div = document.createElement('div');
+        div.id = `user-card-${user.id}`;
+        usersContainer.appendChild(div);
+        renderUserCard(user);
+    });
     updateCalendarVacations();
+    initSortableUsers();
 }
 
 function updateCalendarVacations() {
-    document.querySelectorAll('.calendar__span').forEach(el => el.remove());
-    const yearStart = new Date(state.year, 0, 1);
+    // Очищаем подсветку перед перерисовкой
+    document.querySelectorAll('.calendar__day--highlighted, .calendar__day--to-delete').forEach(d => {
+        d.classList.remove('calendar__day--highlighted', 'calendar__day--to-delete');
+    });
+
+    document.querySelectorAll('.calendar__span, .calendar__tooltip').forEach(el => el.remove());
+
+    const dayData = {};
 
     state.users.forEach(user => {
+        if (user.isVisible === false) return;
+
         (user.vacations || []).forEach(vac => {
             if (!vac.startDate || !vac.endDate) return;
-            const start = new Date(vac.startDate);
-            const end = new Date(vac.endDate);
+            if (vac.endDate < vac.startDate) return;
 
-            // Вычисляем индексы дней
-            const startIndex = Math.floor((start - yearStart) / (1000 * 3600 * 24)) + 1;
-            const endIndex = Math.floor((end - yearStart) / (1000 * 3600 * 24)) + 1;
+            const startIndex = countDaysFromYearStart(vac.startDate);
+            const endIndex = countDaysFromYearStart(vac.endDate);
 
             for (let i = startIndex; i <= endIndex; i++) {
-                const dayDiv = document.getElementById(`dayid_${i}`);
-                if (dayDiv) {
-                    const span = document.createElement('span');
-                    span.classList.add('calendar__span');
-                    span.style.backgroundColor = user.color;
-                    // Чтобы точки были видны, зададим им размер (стили могут перебивать)
-                    span.style.width = '10px';
-                    span.style.height = '10px';
-                    span.style.borderRadius = '50%';
-                    span.style.display = 'inline-block';
-                    span.style.margin = '2px';
-                    dayDiv.appendChild(span);
-                }
+                if (!dayData[i]) dayData[i] = [];
+                dayData[i].push({ name: user.name, color: user.color, userId: user.id, vacId: vac.id, startIndex, endIndex });
             }
         });
     });
+
+    Object.keys(dayData).forEach(dayIndexStr => {
+        const dayIndex = Number(dayIndexStr);
+        const dayDiv = document.getElementById(`dayid_${dayIndex}`);
+        if (!dayDiv) return;
+
+        dayData[dayIndex].forEach((person, idx) => {
+            const span = document.createElement('span');
+            span.classList.add('calendar__span');
+            span.style.backgroundColor = person.color;
+            span.style.left = `${20 + (idx % 4) * 20}%`;
+            if (idx >= 4) span.style.bottom = '10px';
+            dayDiv.appendChild(span);
+        });
+
+        const tooltip = document.createElement('div');
+        tooltip.classList.add('calendar__tooltip');
+
+        dayData[dayIndex].forEach(person => {
+            const item = document.createElement('div');
+            item.classList.add('calendar__tooltip-item');
+            const dot = document.createElement('div');
+            dot.classList.add('calendar__tooltip-dot');
+            dot.style.backgroundColor = person.color;
+            const name = document.createElement('span');
+            name.textContent = person.name;
+            const delBtn = document.createElement('button');
+            delBtn.classList.add('calendar__tooltip-delete');
+            delBtn.innerHTML = '✕';
+            delBtn.title = 'Удалить отпуск';
+
+            item.addEventListener('mouseenter', () => {
+                for (let i = person.startIndex; i <= person.endIndex; i++) {
+                    const d = document.getElementById(`dayid_${i}`);
+                    if (d) d.classList.add('calendar__day--highlighted');
+                }
+            });
+            item.addEventListener('mouseleave', () => {
+                document.querySelectorAll('.calendar__day--highlighted').forEach(d => d.classList.remove('calendar__day--highlighted'));
+            });
+
+            delBtn.addEventListener('mouseenter', () => {
+                for (let i = person.startIndex; i <= person.endIndex; i++) {
+                    const d = document.getElementById(`dayid_${i}`);
+                    if (d) d.classList.add('calendar__day--to-delete');
+                }
+            });
+            delBtn.addEventListener('mouseleave', () => {
+                document.querySelectorAll('.calendar__day--to-delete').forEach(d => d.classList.remove('calendar__day--to-delete'));
+            });
+
+            delBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                // Принудительно убираем подсветку перед удалением
+                document.querySelectorAll('.calendar__day--highlighted, .calendar__day--to-delete').forEach(d => {
+                    d.classList.remove('calendar__day--highlighted', 'calendar__day--to-delete');
+                });
+
+                const u = state.users.find(u => u.id === person.userId);
+                if (!u) return;
+                u.vacations = u.vacations.filter(v => v.id !== person.vacId);
+                scheduleSave(u.id, u);
+                updateCalendarVacations();
+                const card = document.getElementById(`user-card-${u.id}`);
+                if (card) renderUserCard(u);
+            });
+
+            item.append(dot, name, delBtn);
+            tooltip.appendChild(item);
+        });
+
+        dayDiv.appendChild(tooltip);
+    });
 }
+
+// --- Sortable для сотрудников ---
+
+let sortableUsersInstance = null;
+
+function initSortableUsers() {
+    if (sortableUsersInstance) {
+        sortableUsersInstance.destroy();
+    }
+
+    sortableUsersInstance = new Sortable(usersContainer, {
+        animation: 150,
+        handle: '.form__drag-handle-user',
+        ghostClass: 'form__user-sortable-ghost',
+        onEnd: async function (evt) {
+            if (evt.oldIndex === evt.newIndex) return;
+
+            const newOrderIds = Array.from(usersContainer.children).map(el => el.id.replace('user-card-', ''));
+            const newUsers = [];
+            newOrderIds.forEach(id => {
+                const user = state.users.find(u => u.id === id);
+                if (user) newUsers.push(user);
+            });
+
+            state.users = [...newUsers];
+
+            newUsers.forEach((user, index) => {
+                if (user.order !== index) {
+                    user.order = index;
+                    window.firestore.setDoc(getUserDoc(state.year, user.id), { order: index }, { merge: true }).catch(console.error);
+                }
+            });
+
+            requestRender();
+        }
+    });
+}
+
+// --- Безопасный сброс ---
+let resetConfirmMode = false;
+let resetTimeout = null;
+
+const resetBtn = document.getElementById('btn-reset');
+const originalResetText = resetBtn.textContent;
+
+resetBtn.addEventListener('click', async () => {
+    if (!resetConfirmMode) {
+        resetConfirmMode = true;
+        resetBtn.textContent = 'Вы уверены? Нажмите еще раз';
+        resetBtn.classList.add('danger-active');
+
+        clearTimeout(resetTimeout);
+        resetTimeout = setTimeout(() => {
+            resetConfirmMode = false;
+            resetBtn.textContent = originalResetText;
+            resetBtn.classList.remove('danger-active');
+        }, 5000);
+        return;
+    }
+
+    clearTimeout(resetTimeout);
+    resetConfirmMode = false;
+    resetBtn.textContent = originalResetText;
+    resetBtn.classList.remove('danger-active');
+
+    for (const u of state.users) {
+        await window.firestore.deleteDoc(getUserDoc(state.year, u.id));
+    }
+    state.users = [];
+    requestRender();
+});
 
 // --- Инициализация ---
 
 stateEvents.addEventListener('statechange', () => {
-    document.getElementById('header-title').textContent = `График отпусков ${state.year}`;
+    document.getElementById('header-title').textContent = `График отпусков`;
+    document.getElementById('header-year').textContent = state.year;
+
+    const yearSelect = document.getElementById('year-select');
+    if (yearSelect) yearSelect.value = state.year;
 
     if (!document.querySelector('.calendar__month')) {
         renderCalendar(state.year);
@@ -385,12 +808,9 @@ stateEvents.addEventListener('statechange', () => {
     requestRender();
 });
 
-// Слушаем событие окончания отрисовки календаря (из calendar.js)
-window.addEventListener('calendarReady', () => {
-    updateCalendarVacations();
-});
+window.addEventListener('calendarReady', () => updateCalendarVacations());
 
-document.querySelector('.form__button_type_user-add').addEventListener('click', () => {
+document.getElementById('btn-add-user').addEventListener('click', () => {
     const colRef = getUsersCollection(state.year);
     const newDocRef = window.firestore.doc(colRef);
 
@@ -399,25 +819,270 @@ document.querySelector('.form__button_type_user-add').addEventListener('click', 
         name: 'Новый сотрудник',
         color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
         vacations: [],
-        order: Date.now()
+        order: Date.now(),
+        isHidden: false,
+        isVisible: true
     };
 
-    state.users.push(newUser);
+    state.users = [...state.users, newUser];
     requestRender();
-
     window.firestore.setDoc(newDocRef, newUser).catch(console.error);
 });
 
-document.querySelector('.form__button_type_reset').addEventListener('click', async () => {
-    if (!confirm('Точно удалить всех пользователей за этот год?')) return;
-    for (const u of state.users) {
-        await window.firestore.deleteDoc(getUserDoc(state.year, u.id));
-    }
-    state.users = [];
-    requestRender();
+document.getElementById('btn-logout').addEventListener('click', () => {
+    sessionStorage.removeItem('vacationAuth');
+    window.location.href = 'login.html';
 });
 
+const yearSelect = document.getElementById('year-select');
+if (yearSelect) {
+    const years = getAvailableYears();
+    years.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+    });
+
+    yearSelect.value = state.year;
+
+    yearSelect.addEventListener('change', (e) => {
+        const newYear = Number(e.target.value);
+        if (newYear !== state.year) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('year', String(newYear));
+            window.location.href = url.toString();
+        }
+    });
+}
+
+initCalendarInteractions();
 initState();
+
+================================================================================
+FILE: scripts\calendar-interactions.js
+================================================================================
+// scripts/calendar-interactions.js
+
+import { state } from './state.js';
+
+let selectionStart = null;
+
+export function initCalendarInteractions() {
+    const calendarContainer = document.getElementById('calendar-container');
+    if (!calendarContainer) return;
+
+    calendarContainer.addEventListener('click', (e) => {
+        const dayDiv = e.target.closest('.calendar__day[id^="dayid"]');
+        if (!dayDiv) return;
+
+        const dayIndex = parseInt(dayDiv.id.replace('dayid_', ''), 10);
+        if (!dayIndex) return;
+
+        if (selectionStart === null) {
+            selectionStart = dayIndex;
+            highlightRange(selectionStart, selectionStart);
+            return;
+        }
+
+        let start = Math.min(selectionStart, dayIndex);
+        let end = Math.max(selectionStart, dayIndex);
+
+        highlightRange(start, end);
+
+        const yearStart = new Date(state.year, 0, 1);
+
+        const sDate = new Date(yearStart);
+        sDate.setDate(sDate.getDate() + start - 1);
+        const sStr = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}-${String(sDate.getDate()).padStart(2, '0')}`;
+
+        const eDate = new Date(yearStart);
+        eDate.setDate(eDate.getDate() + end - 1);
+        const eStr = `${eDate.getFullYear()}-${String(eDate.getMonth() + 1).padStart(2, '0')}-${String(eDate.getDate()).padStart(2, '0')}`;
+
+        openCreateVacationPopup(sStr, eStr, start, end);
+        selectionStart = null;
+    });
+}
+
+function highlightRange(startIndex, endIndex) {
+    document.querySelectorAll('.calendar__day.selected').forEach(el => el.classList.remove('selected'));
+    for (let i = startIndex; i <= endIndex; i++) {
+        const dayDiv = document.getElementById(`dayid_${i}`);
+        if (dayDiv) dayDiv.classList.add('selected');
+    }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.calendar__day.selected').forEach(el => el.classList.remove('selected'));
+    selectionStart = null;
+}
+
+// Функция для поиска отпусков в выбранном диапазоне
+function getVacationsInRange(startIdx, endIdx) {
+    const result = [];
+    state.users.forEach(user => {
+        (user.vacations || []).forEach(vac => {
+            if (!vac.startDate || !vac.endDate) return;
+            const dStart = new Date(vac.startDate);
+            const dEnd = new Date(vac.endDate);
+            const yearStart = new Date(state.year, 0, 1);
+            const vStart = Math.floor((dStart - yearStart) / (1000 * 3600 * 24)) + 1;
+            const vEnd = Math.floor((dEnd - yearStart) / (1000 * 3600 * 24)) + 1;
+
+            if (startIdx <= vEnd && endIdx >= vStart) {
+                result.push({ user, vac });
+            }
+        });
+    });
+    return result;
+}
+
+function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
+    const popup = document.querySelector('.popup');
+    const popupTitle = popup.querySelector('.popup__title');
+    const popupContent = popup.querySelector('.popup__content');
+
+    const totalDays = endIdx - startIdx + 1;
+    const displayStart = startStr.split('-').reverse().join('.');
+    const displayEnd = endStr.split('-').reverse().join('.');
+
+    const existingVacations = getVacationsInRange(startIdx, endIdx);
+
+    popupTitle.textContent = `Период: ${displayStart} — ${displayEnd} (${totalDays} дн.)`;
+
+    let existingHTML = '';
+    if (existingVacations.length > 0) {
+        existingHTML = `
+            <div class="popup__existing-vacations">
+                <div class="popup__existing-title">Уже в отпуске:</div>
+                ${existingVacations.map(({ user, vac }) => {
+            // Форматируем даты отпуска для отображения
+            const vacStart = new Date(vac.startDate);
+            const vacEnd = new Date(vac.endDate);
+            const startStrShort = `${String(vacStart.getDate()).padStart(2, '0')}.${String(vacStart.getMonth() + 1).padStart(2, '0')}`;
+            const endStrShort = `${String(vacEnd.getDate()).padStart(2, '0')}.${String(vacEnd.getMonth() + 1).padStart(2, '0')}`;
+            return `
+                        <div class="popup__existing-item" data-vac-id="${vac.id}" data-user-id="${user.id}">
+                            <div class="popup__existing-dot" style="background: ${user.color};"></div>
+                            <span class="popup__existing-name">${user.name} <span class="popup__existing-dates">(${startStrShort} – ${endStrShort})</span></span>
+                            <button type="button" class="popup__existing-delete" title="Удалить этот отпуск">✕</button>
+                        </div>
+                    `;
+        }).join('')}
+            </div>
+        `;
+    }
+
+    popupContent.innerHTML = `
+        ${existingHTML}
+        
+        <div class="popup__add-form">
+            <div class="popup__add-title">${existingVacations.length > 0 ? 'Добавить еще один отпуск' : 'Оформить отпуск'}</div>
+            <label style="font-size: 13px; color: var(--text-muted);">Выберите сотрудника</label>
+            <div class="select-wrapper">
+                <select id="popup-user-select" class="form__date">
+                    <option value="">-- Выберите --</option>
+                    ${state.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('')}
+                </select>
+            </div>
+            <div id="popup-error" style="color: var(--accent-red); font-size: 12px; display: none;"></div>
+
+            <button id="popup-save-btn" class="btn btn_add" style="margin-top: 8px;">Добавить отпуск</button>
+        </div>
+    `;
+
+    popup.classList.add('popup_opened');
+
+    const closePopup = () => {
+        popup.classList.remove('popup_opened');
+        clearSelection();
+        popup.removeEventListener('mousedown', onMouseDown);
+    };
+
+    const onMouseDown = (e) => {
+        if (e.target.classList.contains('popup_opened') || e.target.classList.contains('popup__close-button')) {
+            closePopup();
+        }
+    };
+    popup.addEventListener('mousedown', onMouseDown);
+
+    popupContent.querySelectorAll('.popup__existing-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const item = e.target.closest('.popup__existing-item');
+            const vacId = item.dataset.vacId;
+            const userId = item.dataset.userId;
+            const user = state.users.find(u => u.id === userId);
+            if (!user) return;
+
+            user.vacations = user.vacations.filter(v => v.id !== vacId);
+
+            try {
+                const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "users", userId);
+                const { id, ...dataToSave } = user;
+                await window.firestore.setDoc(docRef, dataToSave, { merge: true });
+                window.dispatchEvent(new Event('statechange'));
+                item.remove();
+            } catch (error) {
+                console.error('Ошибка удаления:', error);
+            }
+        });
+    });
+
+    const saveBtn = document.getElementById('popup-save-btn');
+    saveBtn.onclick = async () => {
+        const userId = document.getElementById('popup-user-select').value;
+        const errorDiv = document.getElementById('popup-error');
+        errorDiv.style.display = 'none';
+
+        if (!userId) {
+            errorDiv.textContent = 'Пожалуйста, выберите сотрудника';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        const user = state.users.find(u => u.id === userId);
+        if (!user) return;
+
+        let userOverlap = false;
+        (user.vacations || []).forEach(vac => {
+            if (!vac.startDate || !vac.endDate) return;
+            const dStart = new Date(vac.startDate);
+            const dEnd = new Date(vac.endDate);
+            const yearStart = new Date(state.year, 0, 1);
+            const vStart = Math.floor((dStart - yearStart) / (1000 * 3600 * 24)) + 1;
+            const vEnd = Math.floor((dEnd - yearStart) / (1000 * 3600 * 24)) + 1;
+            if (startIdx <= vEnd && endIdx >= vStart) userOverlap = true;
+        });
+
+        if (userOverlap) {
+            errorDiv.textContent = `У сотрудника ${user.name} уже есть отпуск в этот период.`;
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        if (!user.vacations) user.vacations = [];
+        user.vacations.push({
+            id: `vacationid_${Date.now()}`,
+            startDate: startStr,
+            endDate: endStr
+        });
+
+        try {
+            const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "users", userId);
+            const { id, ...dataToSave } = user;
+            await window.firestore.setDoc(docRef, dataToSave, { merge: true });
+
+            closePopup();
+            window.dispatchEvent(new Event('statechange'));
+
+        } catch (error) {
+            console.error('Ошибка сохранения:', error);
+            errorDiv.textContent = 'Ошибка при сохранении в базу данных.';
+            errorDiv.style.display = 'block';
+        }
+    };
+}
 
 ================================================================================
 FILE: scripts\calendar.js
@@ -433,14 +1098,11 @@ const months = {
 function createMonth(monthName) {
     const monthDiv = document.createElement("div");
     monthDiv.classList.add("calendar__month");
-
     const title = document.createElement("h2");
     title.classList.add("calendar__title");
     title.textContent = monthName;
-
     const area = document.createElement("div");
     area.classList.add("calendar__area");
-
     monthDiv.append(title, area);
     return monthDiv;
 }
@@ -448,9 +1110,7 @@ function createMonth(monthName) {
 function createDay(dayNumber) {
     const dayDiv = document.createElement("div");
     dayDiv.classList.add("calendar__day");
-    if (dayNumber !== "") {
-        dayDiv.textContent = dayNumber;
-    }
+    if (dayNumber !== "") dayDiv.textContent = dayNumber;
     return dayDiv;
 }
 
@@ -459,24 +1119,18 @@ export function renderCalendar(year) {
     if (!calendarContainer) return;
 
     calendarContainer.innerHTML = '';
-
     const startDate = new Date(year, 0, 1);
     const endDate = new Date(year, 11, 31);
 
-    fetch(`https://isdayoff.ru/api/getdata?year=${year}`)
+    drawCalendar(calendarContainer, startDate, endDate);
+
+    fetch(`https://isdayoff.ru/api/getdata?year=${year}`, { signal: AbortSignal.timeout(3000) })
         .then(response => response.text())
-        .then(data => {
-            const prodCalList = data.split("");
-            drawCalendar(calendarContainer, startDate, endDate, prodCalList);
-        })
-        .catch(err => {
-            console.error("Ошибка получения календаря:", err);
-            const fallbackCal = "0000000".repeat(53).split("");
-            drawCalendar(calendarContainer, startDate, endDate, fallbackCal);
-        });
+        .then(data => applyHolidays(data.split("")))
+        .catch(err => console.warn("API isdayoff.ru недоступен.", err));
 }
 
-function drawCalendar(container, startDate, endDate, prodCalList) {
+function drawCalendar(container, startDate, endDate) {
     let dayIndex = 0;
     let currentMonthDiv = null;
 
@@ -489,19 +1143,19 @@ function drawCalendar(container, startDate, endDate, prodCalList) {
             currentMonthDiv = createMonth(months[monthNumber]);
             container.append(currentMonthDiv);
 
-            const emptyDays = dayOfWeek > 0 ? dayOfWeek - 1 : 6;
-            for (let i = 0; i < emptyDays; i++) {
+            // Сдвиг для первого дня (пустые ячейки)
+            const startCol = dayOfWeek === 0 ? 7 : dayOfWeek;
+            for (let i = 1; i < startCol; i++) {
                 currentMonthDiv.querySelector(".calendar__area").append(createDay(""));
             }
         }
 
         const dayDiv = createDay(dayOfMonth);
 
-        if (prodCalList[dayIndex] === "1") {
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
             dayDiv.classList.add("calendar__day_dayoff");
         }
 
-        // ВОТ ОНО! Возвращаем ID для каждого дня
         dayDiv.id = `dayid_${dayIndex + 1}`;
 
         currentMonthDiv.querySelector(".calendar__area").append(dayDiv);
@@ -511,475 +1165,22 @@ function drawCalendar(container, startDate, endDate, prodCalList) {
     window.dispatchEvent(new Event("calendarReady"));
 }
 
-================================================================================
-FILE: scripts\form.js
-================================================================================
-// Forms Logic
-
-const form = document.querySelector(".form");
-const buttonAddUser = document.querySelector(".form__button_type_user-add");
-const templateUser = document.querySelector("#template-user").content;
-const templateVacation = document.querySelector("#template-vacation").content;
-
-let currentUserId = 1;
-let currentVacationId = 1;
-
-// --- User / Vacation Functions ---
-
-const addVacation = (e) => {
-  const newVacationDiv = templateVacation.querySelector(".form__vacation").cloneNode(true);
-  const buttonApplyVacation = newVacationDiv.querySelector(".form__button_type_vac-apply");
-  buttonApplyVacation.addEventListener("click", renderVacationPeriod);
-
-  const buttonDeleteVacation = newVacationDiv.querySelector(".form__button_type_vac-del");
-  buttonDeleteVacation.addEventListener("click", deleteVacation);
-
-  newVacationDiv.id = `vacationid_${currentVacationId}`;
-  currentVacationId += 1;
-
-  // Устанавливаем по умолчанию даты на VACATION_YEAR
-  const startInput = newVacationDiv.querySelector(".form__date_type_start");
-  const endInput = newVacationDiv.querySelector(".form__date_type_end");
-  startInput.value = `${window.VACATION_YEAR}-01-01`;
-  endInput.value = `${window.VACATION_YEAR}-01-01`;
-
-  e.target.parentNode.append(newVacationDiv);
-
-  enableValidation(newVacationDiv, validationConfig);
-
-  // Удаляем старые итоги пользователя
-  const totalElems = ["form__user-total", "form__user-total-workdays"];
-  totalElems.forEach(cls => {
-    const elem = e.target.parentNode.querySelector(`.${cls}`);
-    if (elem) elem.remove();
-  });
-};
-
-const deleteVacation = (e) => {
-  const vacationIdString = `.${e.target.parentNode.id}`;
-  removePrevVacationSpans(vacationIdString);
-
-  const totalElems = ["form__user-total", "form__user-total-working"];
-  totalElems.forEach(cls => {
-    const elem = e.target.parentNode.parentNode.querySelector(`.${cls}`);
-    if (elem) elem.remove();
-  });
-
-  e.target.parentNode.remove();
-};
-
-const hideUserByHideButton = (e) => {
-  const div = e.target.parentNode;
-  div.classList.add("form__user_hidden");
-  div.style = `color: #fff; background-color: ${div.querySelector(".form__color").value};`;
-  for (const child of div.children) {
-    if (!child.classList.contains("form__username")) {
-      child.style = `visibility: collapse; opacity: 0;`;
-    }
-  }
-};
-
-const addUser = (e) => {
-  const newUserDiv = templateUser.querySelector(".form__user").cloneNode(true);
-
-  // Delete user
-  const buttonDeleteUser = newUserDiv.querySelector(".form__button_type_user-del");
-  buttonDeleteUser.addEventListener("click", deleteUser);
-
-  // Edit username
-  const buttonEditUser = newUserDiv.querySelector(".form__button_type_user-edit");
-  buttonEditUser.addEventListener("click", (e) => editUserNameOnAddUser(e, newUserDiv));
-
-  // Add vacation button
-  const buttonAddVacation = newUserDiv.querySelector(".form__button_type_vac-add");
-  buttonAddVacation.addEventListener("click", addVacation);
-
-  newUserDiv.id = `userid_${currentUserId}`;
-  currentUserId += 1;
-
-  // Random color
-  const userColor = newUserDiv.querySelector(".form__color");
-  userColor.value = returnRandomHexColorString();
-
-  const btnHide = newUserDiv.querySelector(".form__button_type_user-hide");
-  btnHide.addEventListener("click", hideUserByHideButton);
-
-  newUserDiv.querySelector(".form__username").addEventListener("click", (e) => {
-    if (e.target.parentNode.classList.contains("form__user_hidden")) {
-      hideAllUsers(e);
-      showUser(newUserDiv);
-    }
-  });
-
-  form.append(newUserDiv);
-  editUserNameOnAddUser(e, newUserDiv);
-};
-
-const deleteUser = (e) => {
-  const userIdString = `.${e.target.parentNode.id}`;
-  if (document.querySelectorAll(userIdString).length > 0) {
-    removePrevVacationSpans(userIdString);
-  }
-  e.target.parentNode.remove();
-};
-
-// --- Username Editing ---
-const editUserNameOnAddUser = (e, newUserDiv) => {
-  const textElement = newUserDiv.querySelector(".form__username");
-  textElement.addEventListener("keydown", checkContentEditableLength);
-  textElement.contentEditable = true;
-  textElement.focus();
-  window.getSelection().selectAllChildren(textElement);
-
-  const editUserName = (e) => {
-    e.preventDefault();
-    textElement.contentEditable = false;
-    textElement.removeEventListener("blur", editUserName);
-  };
-
-  textElement.addEventListener("blur", editUserName);
-  textElement.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      editUserName(e);
-    }
-  });
-};
-
-// --- Show/Hide Users ---
-const hideUser = (div, userColor) => {
-  div.classList.add("form__user_hidden");
-  div.style = `color: #fff; background-color: ${userColor.value};`;
-  for (const child of div.children) {
-    if (!child.classList.contains("form__username")) {
-      child.style = `visibility: collapse; opacity: 0;`;
-    }
-  }
-  // Скрываем блоки итогов, если они есть
-  const totalBlocks = div.querySelectorAll('.form__user-total, .form__user-total-workdays');
-  totalBlocks.forEach(block => {
-    block.style.visibility = 'collapse';
-    block.style.opacity = '0';
-  });
-};
-
-const showUser = (div) => {
-  div.classList.remove("form__user_hidden");
-  div.style = "color: --color-text-primary; background-color: --color-bg-forms";
-  for (const child of div.children) {
-    if (!child.classList.contains("form__username")) {
-      child.style = "visibility: visible; opacity: 1;";
-    }
-  }
-  // Показываем блоки итогов, если они есть
-  const totalBlocks = div.querySelectorAll('.form__user-total, .form__user-total-workdays');
-  totalBlocks.forEach(block => {
-    block.style.visibility = 'visible';
-    block.style.opacity = '1';
-  });
-};
-
-// --- Random Color ---
-const hex = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, "A", "B", "C", "D", "E", "F"];
-const getRandomNumber = () => Math.floor(Math.random() * hex.length);
-const returnRandomHexColorString = () => {
-  let hexColor = "#";
-  let hexColorIndexes = [];
-  for (let i = 0; i < 6; i++) {
-    const num = getRandomNumber();
-    hexColor += hex[num];
-    hexColorIndexes.push(num);
-  }
-  if (hexColorIndexes[0] >= 10 && hexColorIndexes[2] >= 10 && hexColorIndexes[4] >= 10) {
-    return returnRandomHexColorString();
-  }
-  return hexColor;
-};
-
-// --- Prevent long names ---
-function checkContentEditableLength(event) {
-  const isValidShortcut = event.ctrlKey && event.keyCode !== 86;
-  const isValidKeyCode = [8, 16, 17, 37, 38, 39, 40, 46].includes(event.keyCode);
-  const maxLength = parseInt(event.srcElement.getAttribute("maxlength"));
-  const text = event.srcElement.innerText;
-  if (text.length >= maxLength && !isValidKeyCode && !isValidShortcut) {
-    event.preventDefault();
-  }
-}
-
-// --- Hide/Show All Users ---
-const hideAllUsers = (e) => {
-  const usersTemp = document.querySelectorAll(".form__user");
-  if (e.target.classList.contains("form__button_type_user-add") && usersTemp.length !== 0) {
-    usersTemp.forEach(u => hideUser(u, u.querySelector(".form__color")));
-  } else {
-    usersTemp.forEach((u) => {
-      if (e.target.currentTarget !== u) hideUser(u, u.querySelector(".form__color"));
-      else showUser(u);
-    });
-  }
-};
-
-// --- Add User Button ---
-buttonAddUser.addEventListener("click", (e) => {
-  hideAllUsers(e);
-  addUser();
-});
-
-================================================================================
-FILE: scripts\popup.js
-================================================================================
-const popup = document.querySelector(".popup");
-
-renderPopupContent = (e) => {
-  const popupContent = popup.querySelector(".popup__content");
-  const textMonth = e.currentTarget.parentNode.parentNode.querySelector(".calendar__title").textContent;
-  const textDay = e.currentTarget.firstChild.textContent;
-  popup.querySelector(".popup__title").textContent = `Дата: ${textMonth}, ${textDay}`;
-  const todayVacations = e.currentTarget.querySelectorAll(".calendar__span");
-  if (todayVacations.length > 0) {
-    popupContent.textContent = "Сегодня в отпуске:";
-    todayVacations.forEach((vacation) => {
-      vacationClassList = vacation.classList.value.split(" ");
-      vacationClassList.forEach((element) => {
-        if (element.indexOf("user") !== -1) {
-          const todayUser = element;
-          const todayUserColor = document.querySelector(`#${todayUser}`).querySelector(".form__color").value;
-          const todayUserName = document.querySelector(`#${todayUser}`).querySelector(".form__username").textContent;
-          const newPopupDiv = document.createElement("div");
-          newPopupDiv.classList.add("popup__user");
-          popupContent.append(newPopupDiv);
-          const newDivUserColor = document.createElement("div");
-          newDivUserColor.classList.add("popup__color");
-          newDivUserColor.style = `background-color: ${todayUserColor};`;
-          newPopupDiv.append(newDivUserColor);
-          const newDivUserName = document.createElement("p");
-          newDivUserName.classList.add("popup__name");
-          newDivUserName.textContent = todayUserName;
-          newPopupDiv.append(newDivUserName);
+function applyHolidays(prodCalList) {
+    for (let i = 0; i < prodCalList.length; i++) {
+        if (prodCalList[i] === "1") {
+            const dayDiv = document.getElementById(`dayid_${i + 1}`);
+            if (dayDiv && !dayDiv.classList.contains("calendar__day_dayoff")) {
+                dayDiv.classList.add("calendar__day_dayoff");
+            }
         }
-      });
-    });
-  } else {
-    popupContent.replaceChildren();
-    if (e.currentTarget.classList.contains("calendar__day_dayoff")) {
-      popupContent.textContent = "Сегодня выходной (или праздник). Вряд ли на работе кто-то есть.";
-    } else {
-      popupContent.textContent = "Сегодня все на рабочих местах. Никто не в отпуске.";
     }
-  }
-};
-
-openPopup = (currentPopup) => {
-  currentPopup.classList.add("popup_opened");
-  document.addEventListener("keydown", closePopupByEsc);
-};
-
-function closePopup(currentPopup) {
-  currentPopup.classList.remove("popup_opened");
-  document.removeEventListener("keydown", closePopupByEsc);
-}
-
-const closePopupByEsc = (event) => {
-  if (event.key === "Escape") {
-    const currentPopup = document.querySelector(".popup_opened");
-    const isNotCombinedKey = !(event.ctrlKey || event.altKey || event.shiftKey);
-    if (isNotCombinedKey && currentPopup.classList.contains("popup_opened")) {
-      closePopup(currentPopup);
-    }
-  }
-};
-
-popup.addEventListener("mousedown", (evt) => {
-  if (evt.target.classList.contains("popup_opened")) {
-    closePopup(popup);
-  }
-  if (evt.target.classList.contains("popup__close-button")) {
-    closePopup(popup);
-  }
-});
-
-================================================================================
-FILE: scripts\restore.js
-================================================================================
-// restore.js с Realtime Sync (Multi-user Firestore v2)
-const COLLECTION_NAME = 'vacationData_v2';
-const DOC_ID = 'current'; // Или можно привязать к году, например `current_${state.year}`
-
-let isLocalEditing = false;
-let unsubscribe = null;
-
-// Сбор данных формы в массив пользователей
-const gatherFormData = () => {
-  const form = document.querySelector('.form');
-  if (!form) return [];
-
-  const usersData = [];
-  const userElements = form.querySelectorAll('.form__user');
-
-  userElements.forEach(userEl => {
-    const username = userEl.querySelector('.form__username')?.value || '';
-    const color = userEl.querySelector('.form__color')?.value || '#000000';
-    const userId = userEl.id;
-
-    const vacations = [];
-    const vacationElements = userEl.querySelectorAll('.form__vacation');
-    vacationElements.forEach(vacEl => {
-      const startDate = vacEl.querySelector('.form__date_start')?.value || '';
-      const endDate = vacEl.querySelector('.form__date_end')?.value || '';
-      vacations.push({ startDate, endDate });
-    });
-
-    usersData.push({ userId, username, color, vacations });
-  });
-
-  return usersData;
-};
-
-// Рендер данных из базы на страницу (при изменениях извне)
-const renderUsersData = (usersData) => {
-  // Если пользователь сейчас сам что-то вводит/кликает — не перерисовываем, чтобы не сбивать фокус
-  if (isLocalEditing) return;
-
-  const form = document.querySelector('.form');
-  if (!form) return;
-
-  // Очищаем текущие элементы формы перед отрисовкой свежих данных
-  document.querySelectorAll('.form__vacation').forEach(el => el.remove());
-  document.querySelectorAll('.form__user').forEach(el => el.remove());
-
-  if (!usersData || usersData.length === 0) {
-    if (typeof updateCalendar === 'function') updateCalendar();
-    return;
-  }
-
-  usersData.forEach(userData => {
-    const addUserBtn = document.querySelector('.form__button_type_user-add');
-    if (!addUserBtn) return;
-
-    addUserBtn.click();
-
-    const userElements = form.querySelectorAll('.form__user');
-    const currentUserEl = userElements[userElements.length - 1];
-
-    if (userData.userId) currentUserEl.id = userData.userId;
-    const nameInput = currentUserEl.querySelector('.form__username');
-    const colorInput = currentUserEl.querySelector('.form__color');
-    if (nameInput) nameInput.value = userData.username;
-    if (colorInput) colorInput.value = userData.color;
-
-    const addVacationBtn = currentUserEl.querySelector('.form__button_type_vac-add');
-
-    userData.vacations.forEach(vac => {
-      if (addVacationBtn) addVacationBtn.click();
-      const vacElements = currentUserEl.querySelectorAll('.form__vacation');
-      const currentVacEl = vacElements[vacElements.length - 1];
-
-      const startInput = currentVacEl.querySelector('.form__date_start');
-      const endInput = currentVacEl.querySelector('.form__date_end');
-      if (startInput) startInput.value = vac.startDate;
-      if (endInput) endInput.value = vac.endDate;
-    });
-  });
-
-  if (typeof updateCalendar === 'function') {
-    updateCalendar();
-  }
-};
-
-// Сохранение в Firestore (вызывается с дебаунсом)
-const saveToFirestore = async () => {
-  try {
-    const usersData = gatherFormData();
-    await window.firestore.setDoc(
-      window.firestore.doc(window.db, COLLECTION_NAME, DOC_ID),
-      { users: usersData },
-      { merge: true } // merge: true защищает от затирания полей, если структура расширится
-    );
-    console.log('Данные синхронизированы с Firestore (v2)');
-  } catch (error) {
-    console.error('Ошибка сохранения в Firestore:', error);
-  } finally {
-    isLocalEditing = false; // Снимаем флаг блокировки рендеринга после отправки
-  }
-};
-
-// Настройка Realtime подписки (onSnapshot)
-const initRealtimeSync = () => {
-  const docRef = window.firestore.doc(window.db, COLLECTION_NAME, DOC_ID);
-
-  // Слушаем изменения в базе в реальном времени для всех пользователей
-  unsubscribe = window.firestore.onSnapshot(docRef, (docSnap) => {
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      console.log('Получено обновление от другого пользователя (Realtime)');
-      renderUsersData(data.users);
-    } else {
-      console.log('Документ пуст или удален.');
-    }
-  }, (error) => {
-    console.error("Ошибка в onSnapshot подписке:", error);
-  });
-};
-
-// Первичная загрузка при старте страницы
-const restoreContent = async () => {
-  try {
-    const docRef = window.firestore.doc(window.db, COLLECTION_NAME, DOC_ID);
-    const docSnap = await window.firestore.getDoc(docRef);
-
-    if (docSnap.exists() && docSnap.data().users) {
-      renderUsersData(docSnap.data().users);
-    }
-  } catch (error) {
-    console.error('Ошибка первичной загрузки:', error);
-  }
-
-  // Запускаем постоянный реалтайм-слушатель
-  initRealtimeSync();
-};
-
-let saveTimeout = null;
-const scheduleSave = () => {
-  isLocalEditing = true; // Блокируем входящий рендер, пока пользователь вводит данные
-  clearTimeout(saveTimeout);
-  // Отправляем на сервер через 800мс после того, как пользователь перестал кликать/писать
-  saveTimeout = setTimeout(saveToFirestore, 800);
-};
-
-// Слушаем любые изменения формы
-document.addEventListener('input', scheduleSave);
-document.addEventListener('click', scheduleSave);
-document.addEventListener('DOMContentLoaded', restoreContent);
-
-// Кнопка сброса
-const btnReset = document.querySelector('.form__button_type_reset');
-if (btnReset) {
-  btnReset.addEventListener('click', async () => {
-    if (confirm('Точно сбросить все данные для всех?')) {
-      try {
-        isLocalEditing = true;
-        await window.firestore.deleteDoc(window.firestore.doc(window.db, COLLECTION_NAME, DOC_ID));
-        console.log('Данные удалены из Firestore (v2)');
-      } catch (error) {
-        console.error('Ошибка удаления:', error);
-      } finally {
-        isLocalEditing = false;
-      }
-
-      document.querySelectorAll('.form__vacation').forEach(el => el.remove());
-      document.querySelectorAll('.form__user').forEach(el => el.remove());
-      if (typeof updateCalendar === 'function') {
-        updateCalendar();
-      }
-    }
-  });
 }
 
 ================================================================================
 FILE: scripts\state.js
 ================================================================================
-// state.js — v2 (Event-Driven + Локальная сортировка)
+// state.js — v2 (Event-Driven + фикс onSnapshot)
+
 const MIN_YEAR = 2000;
 const MAX_YEAR = 2100;
 
@@ -1001,6 +1202,7 @@ export const state = {
     error: null,
     _unsubscribe: null,
     _pendingRemote: null,
+    _localEditing: false, // Флаг блокировки входящих обновлений
 };
 
 export const stateEvents = new EventTarget();
@@ -1010,7 +1212,6 @@ function emitChange() {
 }
 
 function usersCollection(year) {
-    // Убрали orderBy, чтобы не падало из-за старых записей
     return window.firestore.collection(window.db, "vacationData_v2", String(year), "users");
 }
 
@@ -1056,13 +1257,17 @@ async function startSubscription(year) {
         const users = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            // Если у старого юзера нет order, ставим 0 (он будет первым)
             if (!data.order) data.order = 0;
             users.push({ id: doc.id, ...data });
         });
 
-        // Локальная сортировка по order
         users.sort((a, b) => a.order - b.order);
+
+        // Если мы сейчас сохраняем локальные изменения — игнорируем
+        if (state._localEditing) {
+            console.log('[state] localEditing, skipping snapshot');
+            return;
+        }
 
         applyRemoteUsers(users);
     }, (error) => {
@@ -1092,696 +1297,908 @@ export async function setYear(newYear) {
     await startSubscription(newYear);
 }
 
-================================================================================
-FILE: scripts\vacations.js
-================================================================================
-// Render Vacations
-
-const isIos = /iP(ad|od|hone)/i.test(window.navigator.userAgent);
-
-// --- Проверка пересечения двух периодов ---
-const checkDateOverlap = (start1, end1, start2, end2) => {
-  return start1 <= end2 && start2 <= end1;
-};
-
-// --- Найти все пересекающиеся отпуски у пользователя ---
-const findOverlappingVacations = (currentVacDiv, userContainer) => {
-  const overlaps = [];
-  const currentStart = showVacationStart(currentVacDiv);
-  const currentEnd = showVacationEnd(currentVacDiv);
-
-  // Получаем все отпуски этого пользователя, кроме текущего
-  const allVacDivs = userContainer.querySelectorAll('.form__vacation');
-  allVacDivs.forEach(vacDiv => {
-    if (vacDiv === currentVacDiv) return; // пропускаем текущий отпуск
-    const otherStart = showVacationStart(vacDiv);
-    const otherEnd = showVacationEnd(vacDiv);
-    if (checkDateOverlap(currentStart, currentEnd, otherStart, otherEnd)) {
-      overlaps.push(vacDiv);
+export function getAvailableYears() {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let y = currentYear - 2; y <= currentYear + 3; y++) {
+        years.push(y);
     }
-  });
-  return overlaps;
-};
-
-// --- Найти пересечения со всеми пользователями ---
-const findOverlappingWithAllUsers = (currentVacDiv, currentUserContainer) => {
-  const overlaps = [];
-  const currentStart = showVacationStart(currentVacDiv);
-  const currentEnd = showVacationEnd(currentVacDiv);
-  
-  // Все пользователи
-  const allUsers = document.querySelectorAll('.form__user');
-  allUsers.forEach(userDiv => {
-    if (userDiv === currentUserContainer) return; // своего пользователя пропускаем (уже проверено)
-    const allVacDivs = userDiv.querySelectorAll('.form__vacation');
-    allVacDivs.forEach(vacDiv => {
-      const otherStart = showVacationStart(vacDiv);
-      const otherEnd = showVacationEnd(vacDiv);
-      if (checkDateOverlap(currentStart, currentEnd, otherStart, otherEnd)) {
-        overlaps.push({
-          vacationDiv: vacDiv,
-          userDiv: userDiv,
-          userName: userDiv.querySelector('.form__username').textContent,
-          userColor: userDiv.querySelector('.form__color').value
-        });
-      }
-    });
-  });
-  return overlaps;
-};
-
-// --- Основная функция рендера отпуска ---
-const renderVacationPeriod = (eOrDiv) => {
-  // Если передан event, берём родителя через target, иначе div сразу
-  const parent = eOrDiv.target ? eOrDiv.target.parentNode : eOrDiv;
-  const userContainer = parent.parentNode;
-
-  // Удаляем старые спаны
-  ["form__vacation-period", "form__vacation-period-working"].forEach(cls => {
-    const el = parent.querySelector(`.${cls}`);
-    if (el) el.remove();
-  });
-  ["form__user-total", "form__user-total-workdays"].forEach(cls => {
-    const el = userContainer.querySelector(`.${cls}`);
-    if (el) el.remove();
-  });
-
-  const currentVacationId = parent.id;
-  const vacationSelector = `.${currentVacationId}`;
-  if (document.querySelectorAll(vacationSelector).length > 0) {
-    removePrevVacationSpans(vacationSelector);
-  }
-
-  // Получаем даты начала и конца
-  const vacationStartDay = showVacationStart(parent);
-  const vacationEndDay = showVacationEnd(parent);
-  const currentColor = userContainer.querySelector(".form__color").value;
-
-  // Находим пересекающиеся отпуски
-  const overlappingVacations = findOverlappingVacations(parent, userContainer);
-
-  // Удаляем класс подсветки со всех отпусков пользователя (очистка перед пересчётом)
-  userContainer.querySelectorAll('.form__vacation').forEach(vacDiv => {
-    vacDiv.classList.remove('form__vacation_overlap');
-  });
-
-  // Добавляем класс подсветки и уведомление об ошибке, если есть пересечения
-  if (overlappingVacations.length > 0) {
-    parent.classList.add('form__vacation_overlap');
-    overlappingVacations.forEach(vacDiv => {
-      vacDiv.classList.add('form__vacation_overlap');
-    });
-
-    // Уведомление об ошибке
-    const existingAlert = parent.querySelector('.form__vacation-alert');
-    if (existingAlert) existingAlert.remove();
-    const alertDiv = document.createElement('div');
-    alertDiv.className = 'form__vacation-alert';
-    alertDiv.textContent = `❌ Ошибка: пересекается с ${overlappingVacations.length} другим(ими) отпуском(ами) этого пользователя`;
-    parent.appendChild(alertDiv);
-
-    return; // Выходим из функции, отпуск не рисуется на календаре
-  } else {
-    // Убираем возможное старое уведомление
-    const existingAlert = parent.querySelector('.form__vacation-alert');
-    if (existingAlert) existingAlert.remove();
-    
-    // Проверяем пересечения с другими пользователями (только если внутри пользователя нет пересечений)
-    const overlapsWithOthers = findOverlappingWithAllUsers(parent, userContainer);
-    
-    // Удаляем старое предупреждение о пересечениях с другими
-    const existingCrossAlert = parent.querySelector('.form__vacation-cross-alert');
-    if (existingCrossAlert) existingCrossAlert.remove();
-    
-    if (overlapsWithOthers.length > 0) {
-      const crossAlert = document.createElement('div');
-      crossAlert.className = 'form__vacation-cross-alert';
-      crossAlert.innerHTML = `⚠️ <strong>Пересекается с отпусками:</strong><br>` +
-        overlapsWithOthers.map(ov => 
-          `<span style="color:${ov.userColor}">${ov.userName}</span>`
-        ).join(', ');
-      parent.appendChild(crossAlert);
-    }
-  }
-
-  for (let i = vacationStartDay; i <= vacationEndDay; i++) {
-    const dayDiv = document.querySelector(`#dayid_${i}`);
-    if (!dayDiv) continue; // защита от отсутствующих дней
-
-    const newDivSpan = document.createElement("span");
-    newDivSpan.classList.add("calendar__span", currentVacationId, userContainer.id);
-    newDivSpan.textContent = ".";
-    const sibCount = countSpanSiblings(newDivSpan);
-    newDivSpan.style.color = currentColor;
-    newDivSpan.style.left = setVacationSpanPositionLeft(sibCount);
-    if (sibCount > 3) {
-      newDivSpan.style.bottom = setVacationSpanPositionBottom(sibCount);
-    }
-    dayDiv.append(newDivSpan);
-
-    if (i === vacationStartDay) scrollToVacationStartDiv(dayDiv);
-  }
-
-  // После добавления всех точек перераспределяем их
-  arrangeVacationSpans();
-
-  // Отображение количества дней
-  insertVacationTime(parent, countVacationTime(vacationStartDay, vacationEndDay));
-  insertVacationTimeWorking(parent, countVacationTimeWorking(vacationStartDay, vacationEndDay));
-  insertUserTotal(eOrDiv);
-};
-
-// --- Даты начала и конца отпуска ---
-const showVacationStart = (vacDiv) => {
-  const dateVal = vacDiv.querySelector(".form__date_type_start").value;
-  const vacationStartDate = new Date(dateVal);
-  return countDaysFromYearStart(vacationStartDate);
-};
-
-const showVacationEnd = (vacDiv) => {
-  const dateVal = vacDiv.querySelector(".form__date_type_end").value;
-  const vacationEndDate = new Date(dateVal);
-  return countDaysFromYearStart(vacationEndDate);
-};
-
-// --- Количество дней от начала года ---
-const countDaysFromYearStart = (currentDate) => {
-  const yearStart = new Date(window.VACATION_YEAR, 0, 1);
-  const diffMs = currentDate - yearStart;
-  const days = Math.floor(diffMs / (1000 * 3600 * 24)) + 1;
-  return days;
-};
-
-// --- Удаление старых спанов ---
-const removePrevVacationSpans = (selector) => {
-  document.querySelectorAll(selector).forEach(el => el.remove());
-  arrangeVacationSpans(); // перераспределяем оставшиеся точки
-};
-
-// --- Прокрутка к дню отпуска ---
-const scrollToVacationStartDiv = (dayDiv) => {
-  dayDiv.parentNode.scrollIntoView({ behavior: "smooth" });
-};
-
-// --- Подсчет дней ---
-const countVacationTime = (startDay, endDay) => endDay - startDay + 1;
-
-const countVacationTimeWorking = (startDay, endDay) => {
-  const calDays = document.querySelectorAll('.calendar__day[id^="dayid"]');
-  let working = 0;
-  for (let i = startDay - 1; i <= endDay - 1; i++) {
-    if (calDays[i] && !calDays[i].classList.contains("calendar__day_dayoff")) working++;
-  }
-  return working;
-};
-
-// --- Вставка информации об отпуске ---
-const insertVacationTime = (vacDiv, days) => {
-  const span = document.createElement("span");
-  span.classList.add("form__vacation-period");
-  span.textContent = `Кол-во календарных дней: `;
-  const spanDays = document.createElement("span");
-  spanDays.classList.add("form__vacation-period-days");
-  spanDays.textContent = days;
-  span.append(spanDays);
-  vacDiv.append(span);
-};
-
-const insertVacationTimeWorking = (vacDiv, workingDays) => {
-  const span = document.createElement("span");
-  span.classList.add("form__vacation-period-working");
-  span.textContent = `Кол-во рабочих дней: `;
-  const spanDays = document.createElement("span");
-  spanDays.classList.add("form__vacation-period-days-working");
-  spanDays.textContent = workingDays;
-  span.append(spanDays);
-  vacDiv.append(span);
-};
-
-// --- Подсчет общего отпуска пользователя ---
-const countUserTotal = (eOrDiv) => {
-  const currentUser = eOrDiv.target ? eOrDiv.target.parentNode.parentNode : eOrDiv.parentNode;
-  return Array.from(currentUser.querySelectorAll(".form__vacation-period-days"))
-    .reduce((sum, el) => sum + Number(el.textContent), 0);
-};
-
-const countUserTotalWorkdays = (eOrDiv) => {
-  const currentUser = eOrDiv.target ? eOrDiv.target.parentNode.parentNode : eOrDiv.parentNode;
-  return Array.from(currentUser.querySelectorAll(".form__vacation-period-days-working"))
-    .reduce((sum, el) => sum + Number(el.textContent), 0);
-};
-
-const insertUserTotal = (eOrDiv) => {
-  const userContainer = eOrDiv.target ? eOrDiv.target.parentNode.parentNode : eOrDiv.parentNode;
-  const total = countUserTotal(eOrDiv);
-  const totalWorking = countUserTotalWorkdays(eOrDiv);
-  const spanTotal = document.createElement("span");
-  spanTotal.classList.add("form__user-total");
-  spanTotal.textContent = `Всего календарных дней: ${total}`;
-  const spanTotalWorking = document.createElement("span");
-  spanTotalWorking.classList.add("form__user-total-workdays");
-  spanTotalWorking.textContent = `Всего рабочих дней: ${totalWorking}`;
-  userContainer.append(spanTotal, spanTotalWorking);
-};
-
-// --- Распределение точек отпусков по позициям ---
-const arrangeVacationSpans = () => {
-  // Получаем все дни календаря
-  const allDays = document.querySelectorAll('.calendar__day[id^="dayid"]');
-
-  allDays.forEach(dayDiv => {
-    // Все точки отпусков в этом дне
-    const spans = dayDiv.querySelectorAll('.calendar__span');
-    if (spans.length === 0) return;
-
-    // Сбрасываем позиции
-    spans.forEach(span => {
-      span.style.left = '';
-      span.style.bottom = '';
-    });
-
-    // Распределяем позиции
-    spans.forEach((span, index) => {
-      const pos = index % 4; // 0,1,2,3 - горизонтальные позиции
-      const row = Math.floor(index / 4); // ряды (если больше 4 точек)
-      span.style.left = `${pos * 10}px`; // шаг 10px
-      if (row > 0) {
-        span.style.bottom = `${row * 10}px`;
-      }
-    });
-  });
-};
-
-// --- CSS для спанов ---
-const countSpanSiblings = (span) => {
-  if (!span.parentNode) return 0;
-  return Array.from(span.parentNode.children).filter(sib => sib !== span).length;
-};
-
-const setVacationSpanPositionBottom = (sibCount) => `${2 * Math.floor(sibCount / 4)}px`;
-const setVacationSpanPositionLeft = (sibCount) => `${8 * (3 - (sibCount % 4))}px`;
-
-================================================================================
-FILE: scripts\validate.js
-================================================================================
-// включение валидации вызовом enableValidation
-// все настройки передаются при вызове
-
-const validationConfig = {
-  formSelector: ".form__vacation",
-  inputSelector: ".form__date",
-  startDate: ".form__date_type_start",
-  endDate: ".form__date_type_end",
-  submitButtonSelector: ".form__button_type_vac-apply",
-  inactiveButtonClass: "form__button_type_vac-apply_disabled",
-  inputErrorClass: "form__date_type_error",
-  errorClass: "form__error_visible",
-};
-
-const hideInputError = (formElement, inputElement, settings) => {
-  const errorElement = formElement.querySelector(`.${inputElement.name}-input-error`);
-  inputElement.classList.remove(settings.inputErrorClass);
-  errorElement.classList.remove(settings.errorClass);
-  errorElement.textContent = "";
-};
-
-const showInputError = (formElement, inputElement, settings) => {
-  const errorElement = formElement.querySelector(`.${inputElement.name}-input-error`);
-  inputElement.classList.add(settings.inputErrorClass);
-  errorElement.textContent = inputElement.validationMessage;
-  errorElement.classList.add(settings.errorClass);
-};
-
-const checkInputValidity = (formElement, inputElement, settings) => {
-  if (!inputElement.validity.valid) {
-    showInputError(formElement, inputElement, inputElement.validationMessage, settings);
-  } else {
-    hideInputError(formElement, inputElement, settings);
-  }
-};
-
-const hasInvalidInput = (inputList) => {
-  return inputList.some((inputElement) => {
-    return !inputElement.validity.valid;
-  });
-};
-
-const checkDateSequence = (formElement, settings) => {
-  const startDate = formElement.querySelector(settings.startDate);
-  const endDate = formElement.querySelector(settings.endDate);
-  // it works with 1-day vacation
-  if (endDate.value && startDate.value > endDate.value) {
-    endDate.setCustomValidity("Дата окончания отпуска не может быть меньше даты начала отпуска");
-    showInputError(formElement, endDate, settings);
-  } else {
-    endDate.setCustomValidity("");
-    hideInputError(formElement, endDate, settings);
-  }
-};
-
-const toggleButtonState = (inputList, buttonElement, settings) => {
-  if (hasInvalidInput(inputList)) {
-    buttonElement.classList.add(settings.inactiveButtonClass);
-    buttonElement.disabled = true;
-  } else {
-    buttonElement.classList.remove(settings.inactiveButtonClass);
-    buttonElement.disabled = false;
-  }
-};
-
-const enableValidation = (formElement, settings) => {
-  const inputList = Array.from(formElement.querySelectorAll(settings.inputSelector));
-  const buttonElement = formElement.querySelector(settings.submitButtonSelector);
-  toggleButtonState(inputList, buttonElement, settings);
-  inputList.forEach((inputElement) => {
-    inputElement.addEventListener("input", function () {
-      checkDateSequence(formElement, settings);
-      checkInputValidity(formElement, inputElement, settings);
-      toggleButtonState(inputList, buttonElement, settings);
-    });
-  });
-};
+    return years;
+}
 
 ================================================================================
 FILE: style.css
 ================================================================================
-@import url(./vendor/fonts/fonts.css);
+/* style.css — Главный файл стилей */
+@import url('./styles/01-base.css');
+@import url('./styles/02-layout.css');
+@import url('./styles/03-components.css');
+@import url('./styles/04-calendar.css');
+@import url('./styles/05-popup.css');
 
-/* automatic/manual light mode */
-:root,
-:root.light {
-    --color-text-primary: #333;
-    --color-text-secondary: #fff;
-    --color-text-dayoff: #c00;
-    --color-bg-primary: #ccc;
-    --color-bg-forms: #eee;
-    --color-border: #333;
-    --color-button-black: #333;
-    --color-button-red: #c00;
-    --color-button-green: #090;
-    --color-box-shadow: rgba(0, 0, 0, 0.2);
+================================================================================
+FILE: styles\01-base.css
+================================================================================
+@import url('../vendor/fonts/fonts.css');
+
+:root {
+    --bg-main: #121212;
+    --bg-card: #1e1e1e;
+    --bg-input: #2c2c2c;
+    --bg-hover: #333333;
+
+    --text-primary: #ffffff;
+    --text-secondary: #b3b3b3;
+    --text-muted: #808080;
+    --text-weekend: #f87171;
+
+    --accent-blue: #3b82f6;
+    --accent-green: #10b981;
+    --accent-red: #ef4444;
+
+    --border-color: #333333;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    --shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
 }
 
-.page {
-    min-width: 320px;
-    max-width: 1280px;
-    margin: 0 auto;
-    font-family: "Roboto", Arial, sans-serif;
-    background-color: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    -moz-osx-font-smoothing: grayscale;
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 24px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
-    -webkit-text-size-adjust: 100%;
-    -ms-text-size-adjust: 100%;
-    -moz-text-size-adjust: 100%;
-    text-rendering: optimizeLegibility;
+}
+
+================================================================================
+FILE: styles\02-layout.css
+================================================================================
+.container {
+    max-width: 1440px;
+    margin: 0 auto;
+    background: var(--bg-card);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    padding: 24px;
+}
+
+/* --- ШАПКА --- */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+    min-height: 56px;
+}
+
+.header__brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.header__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #1e1e1e 0%, #10b981 100%);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    flex-shrink: 0;
+}
+
+.header__logo svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* Обертка для заголовка и года */
+.header__titles {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .header__title {
     margin: 0;
-    padding: 20px;
-    text-align: center;
-    font-weight: 900;
-    font-size: 36px;
-    line-height: 1.2;
+    font-size: 22px;
+    /* Увеличили */
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    white-space: nowrap;
 }
 
+/* Бейдж с годом */
+.header__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 8px;
+    font-size: 14px;
+    /* Увеличили */
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.header__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Выпадающий список года */
+.year-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--bg-input);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px 36px 8px 16px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 15px;
+    /* Увеличили */
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    outline: none;
+}
+
+.year-select:hover {
+    background-color: var(--bg-hover);
+    border-color: #444;
+}
+
+.year-select:focus {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.year-select option {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+}
+
+/* Кнопка Выйти */
+.btn_logout {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 15px;
+    /* Увеличили */
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn_logout:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: #444;
+}
+
+/* --- Сетка контента --- */
 .content {
     display: grid;
     grid-template-columns: 320px 1fr;
+    gap: 24px;
+    align-items: start;
 }
 
-@media screen and (max-width: 660px) {
+@media (max-width: 1024px) {
     .content {
         grid-template-columns: 1fr;
     }
 }
 
+/* --- Левая панель --- */
 .content-side {
-    margin: 0 auto;
-}
-
-.calendar {
-    margin: 10px;
-    padding: 10px;
+    background: var(--bg-main);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid var(--border-color);
     display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 20px;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: var(--shadow);
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
 }
 
-.calendar__month {
-    padding: 5px;
-    border-radius: 8px;
-    box-shadow: 0px 5px 10px var(--color-box-shadow);
-    background-color: var(--color-bg-forms);
+.content-side::-webkit-scrollbar {
+    width: 6px;
 }
 
-.calendar__title {
+.content-side::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.content-side::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.side-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+}
+
+.side-title {
     margin: 0;
-    padding: 10px;
-    font-weight: 400;
-    font-size: 32px;
-    line-height: 1.2;
-    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
 }
 
-.calendar__area {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    row-gap: 10px;
-    column-gap: 2px;
+.side-footer {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
 }
 
-.calendar__day {
-    color: var(--color-text-primary);
-}
-
-.calendar__day_dayoff {
-    color: var(--color-text-dayoff);
-}
-
-/* To ignore empty divs without dates */
-.calendar__day[id^="dayid"] {
-    position: relative;
-    padding: 8px;
-    font-weight: 100;
-    font-size: 18px;
-    line-height: 1.2;
-    text-align: center;
+================================================================================
+FILE: styles\03-components.css
+================================================================================
+/* --- Кнопки --- */
+.btn {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
     cursor: pointer;
-    scale: 1;
-    box-shadow: 0px 1px 2px var(--color-box-shadow);
-    transition: scale 0.3s ease-in, box-shadow 0.3s ease-in;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn_add {
+    background: var(--accent-green);
+    color: #fff;
+}
+
+.btn_add:hover {
+    background: #059669;
+}
+
+.btn_small {
+    background: var(--bg-input) !important;
+    color: var(--text-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 6px 10px;
+    font-size: 12px;
+    width: 100%;
+    margin-top: 8px;
+    box-shadow: none;
+}
+
+.btn_small:hover {
+    background: var(--bg-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+.btn_link {
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 8px;
+    width: 100%;
+    text-align: center;
+    transition: color 0.2s;
+}
+
+.btn_link:hover {
+    color: var(--accent-red);
+}
+
+/* --- Карточки пользователей --- */
+.form__user {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    position: relative;
+    /* Важно для работы z-index */
+    z-index: 1;
+    /* Базовый слой */
+    transition: z-index 0.2s;
+    /* Плавный переход слоев */
+}
+
+.form__user:hover {
+    z-index: 10;
+    /* При наведении карточка поднимается над соседними */
+}
+
+.form__user-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form__user-check {
+    display: none;
+}
+
+.form__color {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    background: transparent;
+    flex-shrink: 0;
+}
+
+.form__color::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.form__color::-webkit-color-swatch {
+    border: none;
     border-radius: 50%;
 }
 
-.calendar__day[id^="dayid"]:hover {
-    background-color: var(--color-bg-forms);
-    scale: 1.5;
-    box-shadow: 0px 5px 10px var(--color-box-shadow);
-}
-
-.calendar__span {
-    margin: 0;
-    padding: 0;
-    position: absolute;
-    font-weight: 900;
-    font-size: 32px;
-}
-
-.form {
+/* --- Имя и умный тултип --- */
+.form__username-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 0;
     display: flex;
-    justify-content: center;
-    max-width: 320px;
-    padding: 20px 10px;
-    margin: 0 auto;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.form__button {
-    margin: 0;
-    border-radius: 8px;
-    height: 25px;
-    min-width: 25px;
-    cursor: pointer;
-}
-
-.form__button_type_user-add {
-    display: flex;
-    margin: 10px auto;
-}
-
-.form__button_type_reset {
-    background-color: var(--color-button-red);
-    color: var(--color-text-secondary);
-    display: flex;
-    margin: 10px auto;
-}
-
-.form__user {
-    width: 280px;
-    min-height: 100px;
-    padding: 10px;
-    font-size: 14px;
-    border-radius: 8px;
-    background-color: var(--color-bg-forms);
-    box-shadow: 0px 5px 10px var(--color-box-shadow);
-    transition: all 0.5s ease-in;
-}
-
-.form__user_hidden {
-    cursor: pointer;
-    min-height: 34px;
-    height: 34px;
-}
-
-.form__user-total {
-    display: block;
-    margin: 0;
-    padding: 5px;
-    font-weight: 700;
-    font-size: 16px;
-    text-align: center;
-}
-
-.form__user-total-workdays {
-    display: block;
-    margin: 0;
-    padding: 5px;
-    font-weight: 700;
-    font-size: 16px;
-    text-align: center;
+    align-items: center;
 }
 
 .form__username {
     margin: 0;
-    padding: 10px;
-    display: block;
     font-size: 14px;
-    width: calc(100% - 20px);
-}
-
-.form__button_type_user-edit {
-    display: inline;
-    background-color: var(--color-bg-forms);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-primary);
-    font-weight: 900;
-}
-
-.form__button_type_user-del {
-    display: inline;
-    background-color: var(--color-button-red);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
-    font-weight: 900;
-}
-
-.form__caption {
-    display: block;
-}
-
-.form__color {
-    box-sizing: border-box;
-    vertical-align: middle;
-}
-
-.form__button_type_vac-add {
-    display: inline;
-    margin: 10px auto 0;
-    background-color: var(--color-button-black);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
-    font-weight: 900;
-}
-
-.form__vacation {
-    margin: 10px auto;
-    padding: 5px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border);
-}
-
-.form__date {
-    display: inline;
-    width: 120px;
-    height: 28px;
+    font-weight: 500;
+    color: var(--text-primary);
     cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
 }
 
-.form__date_type_error {
-    border-bottom: 1px solid #f00;
+.form__username:hover {
+    text-decoration: underline;
 }
 
-.form__button_type_vac-apply {
-    margin: 10px auto 0;
-    background-color: var(--color-button-green);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
-    font-weight: 900;
-}
-
-.form__button_type_vac-apply_disabled {
-    background-color: var(--color-bg-primary);
-    color: var(--color-bg-forms);
-    cursor: default;
-}
-
-.form__button_type_vac-del {
-    margin: 10px auto 0;
-    background-color: var(--color-button-red);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
-    font-weight: 900;
-}
-
-.form__vacation-period {
-    display: block;
-    padding: 10px 5px 0;
-}
-
-.form__vacation-period-working {
-    display: block;
-    padding: 5px;
-}
-
-.form__vacation-period-days {
-    display: inline-block;
-    margin: 0;
-}
-
-.form__vacation-period-days-working {
-    display: inline-block;
-    margin: 0;
-}
-
-.form__error {
-    display: block;
-    visibility: collapse;
-    min-height: 0;
-    font-weight: 400;
-    font-size: 12px;
-    line-height: 15px;
-    color: #f00;
+.form__username-tooltip {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    transform: translateY(-4px);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text-primary);
+    box-shadow: var(--shadow-hover);
+    z-index: 9999;
+    /* Поднимаем тултип над всем */
     opacity: 0;
-    transition: all 0.3s ease-in;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    pointer-events: none;
+    white-space: nowrap;
 }
 
-.form__error_visible {
+.form__username-wrapper:hover .form__username-tooltip {
+    opacity: 1;
     visibility: visible;
-    min-height: 30px;
+    transform: translateY(0);
+}
+
+.form__user-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0.3;
+    transition: opacity 0.2s;
+}
+
+.form__user:hover .form__user-actions {
     opacity: 1;
 }
 
+/* Стили для иконок */
+.btn_icon {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn_icon:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn_icon.delete:hover {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* Стиль для скрытого глаза */
+.btn_icon.hidden {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.btn_icon.hidden:hover {
+    opacity: 1;
+}
+
+/* --- Блок отпуска --- */
+.form__vacations-list {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.form__vacation {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 6px;
+}
+
+.form__vacation-dates {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.form__date-sep {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.form__date {
+    width: 100%;
+    padding: 4px 6px;
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+}
+
+.form__date:focus {
+    border-color: var(--accent-blue);
+}
+
+/* Фикс иконки календаря в инпутах дат */
+.form__date::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.form__date::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+.form__vacation-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.form__user_hidden {
+    padding: 6px 10px;
+    border-left: 3px solid #fff;
+    opacity: 0.8;
+    position: relative;
+    z-index: 2;
+    /* Свернутые карточки тоже поверх базовых */
+}
+
+/* --- Валидация пересечений (внутри пользователя) --- */
+.form__vacation_overlap {
+    border: 1px solid var(--accent-red) !important;
+    background: rgba(239, 68, 68, 0.05) !important;
+}
+
+.form__vacation-alert {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
+    padding: 6px 8px;
+    border-radius: 4px;
+}
+
+/* --- Предупреждение о пересечении с другими --- */
+.form__vacation-cross-alert {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    padding: 6px 8px;
+    border-radius: 4px;
+    line-height: 1.4;
+    overflow: hidden;
+    cursor: default;
+}
+
+.form__vacation-cross-alert svg {
+    flex-shrink: 0;
+}
+
+.form__vacation-cross-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.form__vacation-cross-name {
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+/* --- Ручка для перетаскивания отпуска --- */
+.form__drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    color: var(--text-muted);
+    transition: color 0.2s;
+}
+
+.form__drag-handle:hover {
+    color: var(--text-primary);
+}
+
+/* Стиль для "призрака" при перетаскивании отпуска */
+.form__vacation-sortable-ghost {
+    opacity: 0.4;
+    background: var(--bg-hover) !important;
+}
+
+/* --- Итоги по сотруднику --- */
+.form__user-totals {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.form__user-totals b {
+    color: var(--text-primary);
+}
+
+================================================================================
+FILE: styles\04-calendar.css
+================================================================================
+.content-main {
+    width: 100%;
+    overflow: visible;
+}
+
+.calendar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    align-items: stretch;
+}
+
+@media (max-width: 1200px) {
+    .calendar {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .calendar {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Карточка месяца */
+.calendar__month {
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+.calendar__month:hover {
+    box-shadow: var(--shadow-hover);
+}
+
+.calendar__title {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-primary);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Сетка дней */
+.calendar__area {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    align-content: start;
+    flex: 1;
+}
+
+/* Квадратные дни */
+.calendar__day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    position: relative;
+    user-select: none;
+}
+
+/* Пустые дни (сдвиг) — прозрачные */
+.calendar__day:empty {
+    background: transparent;
+    pointer-events: none;
+}
+
+/* Кликабельные дни */
+.calendar__day[id^="dayid"] {
+    cursor: pointer;
+    background: var(--bg-card);
+    transition: all 0.15s ease;
+}
+
+.calendar__day[id^="dayid"]:hover {
+    background: var(--bg-hover);
+    transform: scale(1.05);
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.calendar__day_dayoff {
+    color: var(--text-weekend);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+/* --- Выделение диапазона для создания отпуска --- */
+.calendar__day.selected {
+    background: rgba(59, 130, 246, 0.2) !important;
+    border: 1px solid var(--accent-blue) !important;
+    color: var(--text-primary) !important;
+}
+
+.calendar__day.selected:hover {
+    background: rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Точки отпусков */
+.calendar__span {
+    position: absolute;
+    bottom: 4px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.calendar__span:nth-child(1) {
+    left: 20%;
+    transform: translateX(-50%);
+}
+
+.calendar__span:nth-child(2) {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.calendar__span:nth-child(3) {
+    left: 80%;
+    transform: translateX(-50%);
+}
+
+.calendar__span:nth-child(4) {
+    left: 35%;
+    transform: translateX(-50%);
+    bottom: 10px;
+}
+
+.calendar__span:nth-child(5) {
+    left: 65%;
+    transform: translateX(-50%);
+    bottom: 10px;
+}
+
+/* --- Тултип --- */
+.calendar__day[id^="dayid"] {
+    position: relative;
+}
+
+.calendar__tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    box-shadow: var(--shadow-hover);
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 140px;
+}
+
+/* Невидимая "дорожка" для мышки */
+.calendar__tooltip::before {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 0;
+    right: 0;
+    height: 12px;
+    background: transparent;
+}
+
+.calendar__day[id^="dayid"]:hover .calendar__tooltip,
+.calendar__tooltip:hover {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-4px);
+    pointer-events: auto;
+}
+
+.calendar__tooltip-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    pointer-events: auto;
+}
+
+.calendar__tooltip-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Кнопка удаления в тултипе */
+.calendar__tooltip-delete {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 2px;
+    margin-left: auto;
+    border-radius: 3px;
+    transition: all 0.2s;
+    opacity: 0.7;
+}
+
+.calendar__tooltip-delete:hover {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.2);
+    opacity: 1;
+}
+
+/* --- Подсветка при наведении на имя в тултипе --- */
+.calendar__day--highlighted {
+    background: rgba(59, 130, 246, 0.3) !important;
+    border: 1px solid var(--accent-blue) !important;
+}
+
+/* --- Подсветка при наведении на крестик (удаление) --- */
+.calendar__day--to-delete {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border: 1px solid var(--accent-red) !important;
+    animation: pulse-red 1s infinite;
+}
+
+@keyframes pulse-red {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+
+================================================================================
+FILE: styles\05-popup.css
+================================================================================
 .popup {
     display: flex;
     overflow: hidden;
     height: 0;
     opacity: 0;
     transition: height 0ms 400ms, opacity 400ms 0ms;
-    margin: 0 auto;
     position: fixed;
     top: 0;
     left: 0;
@@ -1789,43 +2206,42 @@ FILE: style.css
     justify-content: center;
     align-items: center;
     width: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
 }
 
 .popup_opened {
-    display: flex;
     height: 100vh;
     opacity: 1;
-    transition: height 0ms 0ms, opacity 600ms 0ms;
+    transition: height 0ms 0ms, opacity 300ms 0ms;
 }
 
 .popup__container {
     position: relative;
-    padding: 20px;
+    padding: 24px;
     display: flex;
     flex-direction: column;
-    background: var(--color-bg-forms);
-    width: 280px;
-    box-shadow: 0 0 25px var(--color-box-shadow);
-    border-radius: 10px;
-    transition: 0.5s all;
+    background: var(--bg-card);
+    width: 320px;
+    box-shadow: var(--shadow-hover);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
 }
 
 .popup__title {
-    margin: 0 auto;
-    font-style: normal;
-    font-weight: 900;
-    font-size: 18px;
-    line-height: 22px;
-    color: var(--color-text-primary);
+    margin: 0;
+    font-weight: 600;
+    font-size: 20px;
+    color: var(--text-primary);
     text-align: center;
 }
 
 .popup__content {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 30px 0;
+    gap: 16px;
+    padding: 24px 0;
     margin: 0;
 }
 
@@ -1834,86 +2250,148 @@ FILE: style.css
     border: none;
     background: transparent;
     position: absolute;
-    display: block;
-    width: 20px;
-    height: 20px;
-    top: -32px;
-    right: 0;
-    background-image: url("./images/close-icon.svg");
+    width: 24px;
+    height: 24px;
+    top: 20px;
+    right: 20px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: center;
-    background-size: cover;
-    box-sizing: border-box;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.popup__close-button:hover {
+    opacity: 1;
 }
 
 .popup__user {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    background: var(--bg-input);
+    padding: 10px 14px;
+    border-radius: 10px;
 }
 
 .popup__color {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
 }
 
 .popup__name {
     margin: 0;
+    color: var(--text-primary);
+    font-weight: 500;
 }
 
-.footer {
-    padding: 80px 0 40px;
+/* --- Блок существующих отпусков в попапе --- */
+.popup__existing-vacations {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.popup__existing-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.popup__existing-item {
+    display: flex;
     align-items: center;
-    margin: 0 auto;
-    gap: 30px;
-    font-style: normal;
-    font-size: 18px;
-    line-height: 18px;
-    font-weight: 400;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--bg-main);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
 }
 
-@media screen and (max-width: 420px) {
-    .footer {
-        font-size: 12px;
-    }
+.popup__existing-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
-.footer__title {
-    display: block;
-    margin: 0;
+.popup__existing-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-primary);
 }
 
-.footer__link {
-    margin: 0;
-    text-decoration: none;
-    color: var(--color-text-primary);
-}
-
-.form__vacation_overlap {
-    border: 2px solid #ff0000 !important;
-    background-color: #ffeeee !important;
-}
-
-.form__vacation-alert {
-    color: #d00;
+.popup__existing-delete {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
     font-size: 14px;
-    padding: 5px;
-    margin-top: 5px;
-    border: 1px dashed #d00;
+    padding: 2px 4px;
     border-radius: 4px;
-    background-color: #ffeaea;
+    transition: all 0.2s;
 }
 
-.form__vacation-cross-alert {
-    color: #e67e00;
+.popup__existing-delete:hover {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.popup__add-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+/* Обертка для селекта со стрелкой */
+.select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.select-wrapper::after {
+    content: '';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    pointer-events: none;
+}
+
+#popup-user-select {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    padding: 10px 36px 10px 10px;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
     font-size: 14px;
-    padding: 5px;
-    margin-top: 5px;
-    border: 1px dashed #e67e00;
-    border-radius: 4px;
-    background-color: #fff9e6;
+    outline: none;
+    cursor: pointer;
+}
+
+#popup-user-select:focus {
+    border-color: var(--accent-blue);
+}
+
+.popup__existing-dates {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: 4px;
 }
 

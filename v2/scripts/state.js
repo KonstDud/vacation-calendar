@@ -1,4 +1,4 @@
-// state.js — v2 (Event-Driven + фикс onSnapshot)
+// state.js — v3 (Группы + Пользователи)
 
 const MIN_YEAR = 2000;
 const MAX_YEAR = 2100;
@@ -17,11 +17,13 @@ function resolveInitialYear() {
 export const state = {
     year: resolveInitialYear(),
     users: [],
+    groups: [],
     loading: true,
     error: null,
-    _unsubscribe: null,
+    _unsubscribeUsers: null,
+    _unsubscribeGroups: null,
     _pendingRemote: null,
-    _localEditing: false, // Флаг блокировки входящих обновлений
+    _localEditing: false,
 };
 
 export const stateEvents = new EventTarget();
@@ -32,6 +34,10 @@ function emitChange() {
 
 function usersCollection(year) {
     return window.firestore.collection(window.db, "vacationData_v2", String(year), "users");
+}
+
+function groupsCollection(year) {
+    return window.firestore.collection(window.db, "vacationData_v2", String(year), "groups");
 }
 
 function isUserTypingNow() {
@@ -63,26 +69,30 @@ function flushPendingRemote() {
 document.addEventListener("focusout", () => setTimeout(flushPendingRemote, 50), true);
 
 async function startSubscription(year) {
-    if (state._unsubscribe) state._unsubscribe();
+    if (state._unsubscribeUsers) state._unsubscribeUsers();
+    if (state._unsubscribeGroups) state._unsubscribeGroups();
+
     await window.firebaseReady;
 
     state.year = year;
     state.loading = true;
     state.users = [];
+    state.groups = [];
     emitChange();
 
     const { onSnapshot, query } = window.firestore;
-    state._unsubscribe = onSnapshot(query(usersCollection(year)), (snapshot) => {
+
+    state._unsubscribeUsers = onSnapshot(query(usersCollection(year)), (snapshot) => {
         const users = [];
         snapshot.forEach(doc => {
             const data = doc.data();
             if (!data.order) data.order = 0;
+            if (!data.groupId) data.groupId = '';
             users.push({ id: doc.id, ...data });
         });
 
         users.sort((a, b) => a.order - b.order);
 
-        // Если мы сейчас сохраняем локальные изменения — игнорируем
         if (state._localEditing) {
             console.log('[state] localEditing, skipping snapshot');
             return;
@@ -90,10 +100,24 @@ async function startSubscription(year) {
 
         applyRemoteUsers(users);
     }, (error) => {
-        console.error("[state] Ошибка синхронизации:", error);
+        console.error("[state] Ошибка синхронизации пользователей:", error);
         state.error = error.message;
         state.loading = false;
         emitChange();
+    });
+
+    state._unsubscribeGroups = onSnapshot(query(groupsCollection(year)), (snapshot) => {
+        const groups = [];
+        snapshot.forEach(doc => {
+            groups.push({ id: doc.id, ...doc.data() });
+        });
+
+        groups.sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+
+        state.groups = groups;
+        emitChange();
+    }, (error) => {
+        console.error("[state] Ошибка синхронизации групп:", error);
     });
 }
 
@@ -123,4 +147,49 @@ export function getAvailableYears() {
         years.push(y);
     }
     return years;
+}
+
+export async function addGroup(name, color, showIfEmpty = false) {
+    const colRef = groupsCollection(state.year);
+    const newDocRef = window.firestore.doc(colRef);
+
+    const newGroup = {
+        name: name,
+        color: color || '#808080',
+        isVisible: true,
+        showIfEmpty: showIfEmpty,
+        isCollapsed: false,
+        order: Date.now()
+    };
+
+    try {
+        await window.firestore.setDoc(newDocRef, newGroup);
+        return newDocRef.id;
+    } catch (e) {
+        console.error("Ошибка создания группы:", e);
+    }
+}
+
+export async function updateGroup(groupId, data) {
+    const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", groupId);
+    try {
+        await window.firestore.setDoc(docRef, data, { merge: true });
+    } catch (e) {
+        console.error("Ошибка обновления группы:", e);
+    }
+}
+
+export async function deleteGroup(groupId) {
+    const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", groupId);
+    try {
+        await window.firestore.deleteDoc(docRef);
+
+        const usersToUpdate = state.users.filter(u => u.groupId === groupId);
+        for (const u of usersToUpdate) {
+            const userDocRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "users", u.id);
+            await window.firestore.setDoc(userDocRef, { groupId: '' }, { merge: true });
+        }
+    } catch (e) {
+        console.error("Ошибка удаления группы:", e);
+    }
 }

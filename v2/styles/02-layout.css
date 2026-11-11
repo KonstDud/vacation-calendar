@@ -52,7 +52,6 @@
 .header__title {
     margin: 0;
     font-size: 22px;
-    /* Увеличили */
     font-weight: 500;
     letter-spacing: -0.01em;
     color: var(--text-primary);
@@ -70,7 +69,6 @@
     border: 1px solid rgba(16, 185, 129, 0.2);
     border-radius: 8px;
     font-size: 14px;
-    /* Увеличили */
     font-weight: 600;
     letter-spacing: 0.02em;
 }
@@ -96,7 +94,6 @@
     border-radius: 10px;
     font-family: inherit;
     font-size: 15px;
-    /* Увеличили */
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
@@ -126,7 +123,6 @@
     border-radius: 10px;
     padding: 8px 16px;
     font-size: 15px;
-    /* Увеличили */
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
@@ -190,6 +186,12 @@
     padding-bottom: 8px;
 }
 
+/* Фикс высоты кнопки добавления */
+.side-header .btn_add {
+    height: 32px;
+    padding: 0 12px;
+}
+
 .side-title {
     margin: 0;
     font-size: 15px;
@@ -200,4 +202,157 @@
     margin-top: auto;
     padding-top: 12px;
     border-top: 1px solid var(--border-color);
+}
+
+/* --- Фильтр и управление группами (на будущее) --- */
+.side-groups-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.side-groups-controls .year-select {
+    flex: 1;
+    width: 100%;
+}
+
+.btn_manage-groups {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0 12px;
+    height: 38px;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+
+.btn_manage-groups:hover {
+    color: var(--text-primary);
+    border-color: #444;
+    background: var(--bg-hover);
+    border-radius: 10px;
+}
+
+/* --- Дерево групп --- */
+.group-block {
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-card);
+    overflow: hidden;
+}
+
+.group-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--bg-input);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+    gap: 8px;
+}
+
+.group-header:hover {
+    background: var(--bg-hover);
+}
+
+.group-color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
+.group-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.group-users {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Убираем рамки у карточек внутри групп, чтобы не было двойных рамок */
+.group-users .form__user {
+    border: none;
+    background: var(--bg-main);
+    box-shadow: none;
+    margin: 0;
+}
+
+/* --- Новые стили для дерева --- */
+.group-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+/* Инлайн инпут цвета в заголовке */
+.group-color-picker-inline {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    cursor: pointer;
+    background: transparent;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.group-color-picker-inline::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.group-color-picker-inline::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+/* Круглый инпут цвета для модалки групп */
+.group-color-picker {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.group-color-picker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.group-color-picker::-webkit-color-swatch {
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+}
+
+.group-color-picker::-moz-color-swatch {
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+}
+
+/* Увеличенная зона клика для глаза группы */
+.btn_icon-group {
+    padding: 6px 10px !important;
+    width: auto !important;
+    min-width: 32px;
+    margin-left: 4px;
 }

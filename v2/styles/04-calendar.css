@@ -22,7 +22,6 @@
     }
 }
 
-/* Карточка месяца */
 .calendar__month {
     background: var(--bg-main);
     border: 1px solid var(--border-color);
@@ -47,7 +46,6 @@
     border-bottom: 1px solid var(--border-color);
 }
 
-/* Сетка дней */
 .calendar__area {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -56,7 +54,6 @@
     flex: 1;
 }
 
-/* Квадратные дни */
 .calendar__day {
     aspect-ratio: 1;
     display: flex;
@@ -70,13 +67,11 @@
     user-select: none;
 }
 
-/* Пустые дни (сдвиг) — прозрачные */
 .calendar__day:empty {
     background: transparent;
     pointer-events: none;
 }
 
-/* Кликабельные дни */
 .calendar__day[id^="dayid"] {
     cursor: pointer;
     background: var(--bg-card);
@@ -95,7 +90,6 @@
     background: rgba(239, 68, 68, 0.05);
 }
 
-/* --- Выделение диапазона для создания отпуска --- */
 .calendar__day.selected {
     background: rgba(59, 130, 246, 0.2) !important;
     border: 1px solid var(--accent-blue) !important;
@@ -110,10 +104,13 @@
 .calendar__span {
     position: absolute;
     bottom: 4px;
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    /* Чуть увеличили */
+    height: 6px;
     border-radius: 50%;
     display: inline-block;
+    cursor: pointer;
+    z-index: 6;
 }
 
 .calendar__span:nth-child(1) {
@@ -134,20 +131,16 @@
 .calendar__span:nth-child(4) {
     left: 35%;
     transform: translateX(-50%);
-    bottom: 10px;
+    bottom: 12px;
 }
 
 .calendar__span:nth-child(5) {
     left: 65%;
     transform: translateX(-50%);
-    bottom: 10px;
+    bottom: 12px;
 }
 
-/* --- Тултип --- */
-.calendar__day[id^="dayid"] {
-    position: relative;
-}
-
+/* --- ТУЛТИП --- */
 .calendar__tooltip {
     position: absolute;
     bottom: 100%;
@@ -161,31 +154,43 @@
     z-index: 100;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
-    pointer-events: none;
+    /* Задержка на исчезновение 0.4с */
+    transition: opacity 0.2s ease 0.4s, transform 0.2s ease 0.4s, visibility 0.2s 0.4s;
+    pointer-events: auto;
     display: flex;
     flex-direction: column;
     gap: 6px;
     min-width: 140px;
+    white-space: nowrap;
 }
 
-/* Невидимая "дорожка" для мышки */
+/* ОГРОМНАЯ невидимая дорожка для мышки (от точки до тултипа) */
 .calendar__tooltip::before {
     content: '';
     position: absolute;
-    bottom: -12px;
-    left: 0;
-    right: 0;
-    height: 12px;
+    bottom: -100%;
+    /* Перекрываем всё пространство вниз */
+    left: -20px;
+    right: -20px;
+    height: 100%;
     background: transparent;
 }
 
-.calendar__day[id^="dayid"]:hover .calendar__tooltip,
+/* Показываем тултип при наведении на ячейку с классом --hovered */
+.calendar__day[id^="dayid"].calendar__day--hovered .calendar__tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-4px);
+    /* Убираем задержку при появлении */
+    transition: opacity 0.2s ease 0s, transform 0.2s ease 0s, visibility 0.2s 0s;
+}
+
+/* А также если навели на сам тултип */
 .calendar__tooltip:hover {
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(-4px);
-    pointer-events: auto;
+    transition: opacity 0.2s ease 0s, transform 0.2s ease 0s, visibility 0.2s 0s;
 }
 
 .calendar__tooltip-item {
@@ -194,8 +199,6 @@
     gap: 8px;
     font-size: 13px;
     color: var(--text-primary);
-    white-space: nowrap;
-    pointer-events: auto;
 }
 
 .calendar__tooltip-dot {
@@ -205,7 +208,6 @@
     flex-shrink: 0;
 }
 
-/* Кнопка удаления в тултипе */
 .calendar__tooltip-delete {
     background: transparent;
     border: none;
@@ -225,13 +227,11 @@
     opacity: 1;
 }
 
-/* --- Подсветка при наведении на имя в тултипе --- */
 .calendar__day--highlighted {
     background: rgba(59, 130, 246, 0.3) !important;
     border: 1px solid var(--accent-blue) !important;
 }
 
-/* --- Подсветка при наведении на крестик (удаление) --- */
 .calendar__day--to-delete {
     background: rgba(239, 68, 68, 0.2) !important;
     border: 1px solid var(--accent-red) !important;
@@ -250,4 +250,61 @@
     100% {
         box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
     }
+}
+
+/* --- Поповер календаря --- */
+.calendar-popover {
+    position: absolute;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    box-shadow: var(--shadow-hover);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 160px;
+    white-space: nowrap;
+}
+
+.calendar-popover-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.calendar-popover-item:hover {
+    background: var(--bg-hover);
+}
+
+.calendar-popover-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.calendar-popover-delete {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0 2px;
+    margin-left: auto;
+    border-radius: 3px;
+    transition: all 0.2s;
+    opacity: 0.7;
+}
+
+.calendar-popover-delete:hover {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.2);
+    opacity: 1;
 }
