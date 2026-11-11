@@ -308,3 +308,48 @@
     background: rgba(239, 68, 68, 0.2);
     opacity: 1;
 }
+
+/* --- Простой тултип при наведении --- */
+.calendar__simple-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 10px;
+    box-shadow: var(--shadow-hover);
+    z-index: 50;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    pointer-events: none;
+    /* МЫШЬ ПРОХОДИТ СКВОЗЬ ТУЛТИП */
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+/* Показываем при наведении на ячейку */
+.calendar__day[id^="dayid"]:hover .calendar__simple-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-4px);
+}
+
+.calendar__simple-tooltip-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.calendar__simple-tooltip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}

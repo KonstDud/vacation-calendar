@@ -4,7 +4,7 @@ import { countDaysFromYearStart } from './utils.js';
 
 export function updateCalendarVacations(scheduleSave, requestRender, renderUserCard) {
     document.querySelectorAll('.calendar__day--highlighted, .calendar__day--to-delete').forEach(d => d.classList.remove('calendar__day--highlighted', 'calendar__day--to-delete'));
-    document.querySelectorAll('.calendar__span, .calendar__span-plus').forEach(el => el.remove());
+    document.querySelectorAll('.calendar__span, .calendar__span-plus, .calendar__simple-tooltip').forEach(el => el.remove());
 
     const oldPopover = document.getElementById('calendar-popover');
     if (oldPopover) oldPopover.remove();
@@ -13,7 +13,16 @@ export function updateCalendarVacations(scheduleSave, requestRender, renderUserC
 
     state.users.forEach(user => {
         if (user.isVisible === false) return;
-        const group = state.groups.find(g => g.id === user.groupId);
+
+        // ИСПРАВЛЕННАЯ ПРОВЕРКА ГРУППЫ (включая ungrouped)
+        let group;
+        if (user.groupId) {
+            group = state.groups.find(g => g.id === user.groupId);
+        } else {
+            // Если groupId пустой, значит это "Без группы"
+            group = state.groups.find(g => g.id === 'ungrouped');
+        }
+
         if (group && group.isVisible === false) return;
 
         (user.vacations || []).forEach(vac => {
@@ -37,8 +46,28 @@ export function updateCalendarVacations(scheduleSave, requestRender, renderUserC
 
         const people = dayData[dayIndex];
 
-        dayDiv.querySelectorAll('.calendar__span, .calendar__span-plus').forEach(el => el.remove());
+        dayDiv.querySelectorAll('.calendar__span, .calendar__span-plus, .calendar__simple-tooltip').forEach(el => el.remove());
 
+        // 1. ПРОСТОЙ ТУЛТИП
+        const simpleTooltip = document.createElement('div');
+        simpleTooltip.classList.add('calendar__simple-tooltip');
+
+        people.forEach(person => {
+            const item = document.createElement('div');
+            item.classList.add('calendar__simple-tooltip-item');
+            const dot = document.createElement('div');
+            dot.classList.add('calendar__simple-tooltip-dot');
+            dot.style.backgroundColor = person.color;
+            const name = document.createElement('span');
+            name.textContent = person.name;
+
+            item.append(dot, name);
+            simpleTooltip.appendChild(item);
+        });
+
+        dayDiv.appendChild(simpleTooltip);
+
+        // 2. ТОЧКИ
         if (people.length <= 3) {
             people.forEach((person, idx) => {
                 const span = document.createElement('span');
@@ -56,7 +85,6 @@ export function updateCalendarVacations(scheduleSave, requestRender, renderUserC
                 dayDiv.appendChild(span);
             });
         } else {
-            // Если оставшихся больше 9, рисуем только 1 точку, чтобы влез +10
             const isTwoDigit = (people.length - 2) > 9;
             const dotsToRender = isTwoDigit ? people.slice(0, 1) : people.slice(0, 2);
 
@@ -125,6 +153,16 @@ function openPopover(e, people, scheduleSave, requestRender, renderUserCard) {
         });
         item.addEventListener('mouseleave', () => {
             document.querySelectorAll('.calendar__day--highlighted').forEach(d => d.classList.remove('calendar__day--highlighted'));
+        });
+
+        delBtn.addEventListener('mouseenter', () => {
+            for (let i = person.startIndex; i <= person.endIndex; i++) {
+                const d = document.getElementById(`dayid_${i}`);
+                if (d) d.classList.add('calendar__day--to-delete');
+            }
+        });
+        delBtn.addEventListener('mouseleave', () => {
+            document.querySelectorAll('.calendar__day--to-delete').forEach(d => d.classList.remove('calendar__day--to-delete'));
         });
 
         delBtn.addEventListener('click', async (e) => {
