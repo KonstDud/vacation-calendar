@@ -319,6 +319,11 @@ function requestRender() {
 }
 
 function updateCalendarVacations() {
+    // Очищаем подсветку перед перерисовкой
+    document.querySelectorAll('.calendar__day--highlighted, .calendar__day--to-delete').forEach(d => {
+        d.classList.remove('calendar__day--highlighted', 'calendar__day--to-delete');
+    });
+
     document.querySelectorAll('.calendar__span, .calendar__tooltip').forEach(el => el.remove());
 
     const dayData = {};
@@ -370,7 +375,6 @@ function updateCalendarVacations() {
             delBtn.innerHTML = '✕';
             delBtn.title = 'Удалить отпуск';
 
-            // Подсветка при наведении на имя
             item.addEventListener('mouseenter', () => {
                 for (let i = person.startIndex; i <= person.endIndex; i++) {
                     const d = document.getElementById(`dayid_${i}`);
@@ -381,7 +385,6 @@ function updateCalendarVacations() {
                 document.querySelectorAll('.calendar__day--highlighted').forEach(d => d.classList.remove('calendar__day--highlighted'));
             });
 
-            // Подсветка при наведении на крестик
             delBtn.addEventListener('mouseenter', () => {
                 for (let i = person.startIndex; i <= person.endIndex; i++) {
                     const d = document.getElementById(`dayid_${i}`);
@@ -394,6 +397,11 @@ function updateCalendarVacations() {
 
             delBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
+                // Принудительно убираем подсветку перед удалением
+                document.querySelectorAll('.calendar__day--highlighted, .calendar__day--to-delete').forEach(d => {
+                    d.classList.remove('calendar__day--highlighted', 'calendar__day--to-delete');
+                });
+
                 const u = state.users.find(u => u.id === person.userId);
                 if (!u) return;
                 u.vacations = u.vacations.filter(v => v.id !== person.vacId);
