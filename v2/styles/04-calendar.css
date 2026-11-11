@@ -1,6 +1,7 @@
 .content-main {
     width: 100%;
-    overflow: hidden;
+    overflow: visible;
+    /* Было hidden, теперь visible, чтобы тултип не обрезался */
 }
 
 .calendar {
@@ -8,7 +9,6 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
     align-items: stretch;
-    /* Растягиваем карточки на одну высоту */
 }
 
 @media (max-width: 1200px) {
@@ -54,20 +54,16 @@
     grid-template-columns: repeat(7, 1fr);
     gap: 4px;
     align-content: start;
-    /* Прижимаем строки к верху */
     flex: 1;
-    /* Чтобы сетка занимала доступное место */
 }
 
 /* Квадратные дни */
 .calendar__day {
     aspect-ratio: 1;
-    /* Квадрат! */
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 15px;
-    /* Вернули нормальный шрифт */
     font-weight: 500;
     color: var(--text-secondary);
     border-radius: 6px;
