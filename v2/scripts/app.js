@@ -1,4 +1,4 @@
-// scripts/app.js — ФИНАЛЬНЫЙ ФИКС ПРЫЖКОВ ГРУПП
+// scripts/app.js — Локальное сворачивание (не перезаписывает настройки)
 
 import { state, initState, stateEvents, getAvailableYears, updateGroup } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -80,24 +80,25 @@ function requestRender() {
         groupUsersContainer.className = 'group-users';
         groupUsersContainer.dataset.groupId = isUngrouped ? '' : group.id;
 
-        const isCollapsed = group.isCollapsed === true;
-        groupUsersContainer.style.display = isCollapsed ? 'none' : 'flex';
+        if (group.isCollapsed === true) {
+            groupUsersContainer.classList.add('collapsed');
+        }
 
         const toggleBtn = groupHeader.querySelector('.toggle-group-btn');
-        toggleBtn.textContent = isCollapsed ? '▼' : '▲';
+        toggleBtn.textContent = group.isCollapsed ? '▼' : '▲';
 
-        // СОХРАНЯЕМ СОСТОЯНИЕ СВОРАЧИВАНИЯ В БАЗУ
-        toggleBtn.addEventListener('click', async (e) => {
+        // ЛОКАЛЬНОЕ СВОРАЧИВАНИЕ (без сохранения в базу)
+        toggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const newIsCollapsed = !group.isCollapsed;
-
-            // Меняем локально
-            group.isCollapsed = newIsCollapsed;
-            groupUsersContainer.style.display = newIsCollapsed ? 'none' : 'flex';
-            e.target.textContent = newIsCollapsed ? '▼' : '▲';
-
-            // Сохраняем в базу
-            await updateGroup(group.id, { isCollapsed: newIsCollapsed });
+            const isHiddenNow = groupUsersContainer.classList.contains('collapsed');
+            if (isHiddenNow) {
+                groupUsersContainer.classList.remove('collapsed');
+                e.target.textContent = '▲';
+            } else {
+                groupUsersContainer.classList.add('collapsed');
+                e.target.textContent = '▼';
+            }
+            // НЕ ВЫЗЫВАЕМ updateGroup!
         });
 
         groupHeader.querySelector('.toggle-group-visibility').addEventListener('click', async (e) => {
@@ -156,7 +157,7 @@ function initGroupSortable() {
     });
 }
 
-// --- Перетаскивание сотрудников (с защитой от утечек) ---
+// --- Перетаскивание сотрудников ---
 let userSortableInstances = [];
 
 function initUserDragAndDrop() {
@@ -172,6 +173,29 @@ function initUserDragAndDrop() {
             animation: 150,
             handle: '.form__drag-handle-user',
             ghostClass: 'form__user-sortable-ghost',
+
+            onMove: function (evt) {
+                const related = evt.related;
+                if (!related) return;
+
+                const groupBlock = related.closest('.group-block');
+                if (!groupBlock) return;
+
+                const groupId = groupBlock.dataset.groupId;
+                const group = state.groups.find(g => g.id === groupId);
+
+                if (group && group.isCollapsed) {
+                    const usersContainer = groupBlock.querySelector('.group-users');
+                    if (usersContainer) {
+                        usersContainer.classList.remove('collapsed');
+                        const toggleBtn = groupBlock.querySelector('.toggle-group-btn');
+                        if (toggleBtn) toggleBtn.textContent = '▲';
+                        group.isCollapsed = false;
+                        // Здесь тоже не сохраняем в базу, чтобы не сбить настройки
+                    }
+                }
+            },
+
             onEnd: async function (evt) {
                 const itemEl = evt.item;
                 const newContainer = evt.to;
@@ -206,7 +230,7 @@ stateEvents.addEventListener('statechange', () => {
 
 window.addEventListener('calendarReady', () => updateCalendarVacations());
 
-document.getElementById('btn-add-user').addEventListener('click', () => {
+document.getElementById('btn-add-user').addEventListener('click', async () => {
     const colRef = window.firestore.collection(window.db, "vacationData_v2", String(state.year), "users");
     const newDocRef = window.firestore.doc(colRef);
 
@@ -220,6 +244,13 @@ document.getElementById('btn-add-user').addEventListener('click', () => {
         isVisible: true,
         groupId: ''
     };
+
+    const ungrouped = state.groups.find(g => g.id === 'ungrouped');
+    if (ungrouped && ungrouped.isCollapsed) {
+        ungrouped.isCollapsed = false;
+        const ungroupedDocRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", "ungrouped");
+        await window.firestore.setDoc(ungroupedDocRef, { isCollapsed: false }, { merge: true });
+    }
 
     state.users = [...state.users, newUser];
     requestRender();
