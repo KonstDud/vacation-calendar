@@ -1,4 +1,4 @@
-// scripts/app.js — Локальное сворачивание (не перезаписывает настройки)
+// scripts/app.js — Фикс сброса сворачивания при перерисовке
 
 import { state, initState, stateEvents, getAvailableYears, updateGroup } from './state.js';
 import { renderCalendar } from './calendar.js';
@@ -9,8 +9,10 @@ import { updateCalendarVacations as renderCalendarVacations } from './calendar-g
 import { getIconEye, getIconEyeOff } from './utils.js';
 
 const usersContainer = document.getElementById('users-container');
-
 const updateCalendarVacations = () => renderCalendarVacations(scheduleSave, requestRender, renderUserCard);
+
+// ЛОКАЛЬНОЕ СОСТОЯНИЕ СВОРАЧИВАНИЯ (чтобы не сбивать настройки при перерисовке)
+const localCollapsedState = {};
 
 async function ensureUngroupedGroup() {
     const ungroupedDocRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", "ungrouped");
@@ -80,25 +82,36 @@ function requestRender() {
         groupUsersContainer.className = 'group-users';
         groupUsersContainer.dataset.groupId = isUngrouped ? '' : group.id;
 
-        if (group.isCollapsed === true) {
+        // ПРИМЕНЯЕМ ЛОКАЛЬНОЕ СОСТОЯНИЕ (если оно есть), иначе берем из базы
+        let isCollapsed = group.isCollapsed === true;
+        if (localCollapsedState[group.id] !== undefined) {
+            isCollapsed = localCollapsedState[group.id];
+        } else {
+            localCollapsedState[group.id] = isCollapsed; // Запоминаем при первом рендере
+        }
+
+        if (isCollapsed) {
             groupUsersContainer.classList.add('collapsed');
         }
 
         const toggleBtn = groupHeader.querySelector('.toggle-group-btn');
-        toggleBtn.textContent = group.isCollapsed ? '▼' : '▲';
+        toggleBtn.textContent = isCollapsed ? '▼' : '▲';
 
-        // ЛОКАЛЬНОЕ СВОРАЧИВАНИЕ (без сохранения в базу)
         toggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const isHiddenNow = groupUsersContainer.classList.contains('collapsed');
-            if (isHiddenNow) {
-                groupUsersContainer.classList.remove('collapsed');
-                e.target.textContent = '▲';
-            } else {
+            const newIsCollapsed = !isHiddenNow;
+
+            if (newIsCollapsed) {
                 groupUsersContainer.classList.add('collapsed');
                 e.target.textContent = '▼';
+            } else {
+                groupUsersContainer.classList.remove('collapsed');
+                e.target.textContent = '▲';
             }
-            // НЕ ВЫЗЫВАЕМ updateGroup!
+
+            // Запоминаем в локальное состояние (в базу не пишем!)
+            localCollapsedState[group.id] = newIsCollapsed;
         });
 
         groupHeader.querySelector('.toggle-group-visibility').addEventListener('click', async (e) => {
@@ -142,8 +155,26 @@ function initGroupSortable() {
         animation: 150,
         handle: '.group-header',
         ghostClass: 'group-block-ghost',
+
+        onStart: function (evt) {
+            const item = evt.item;
+            const usersContainer = item.querySelector('.group-users');
+            if (usersContainer) {
+                usersContainer.classList.add('collapsed');
+            }
+        },
+
         onEnd: async function (evt) {
-            if (evt.oldIndex === evt.newIndex) return;
+            if (evt.oldIndex === evt.newIndex) {
+                const item = evt.item;
+                const usersContainer = item.querySelector('.group-users');
+                const groupId = item.dataset.groupId;
+                if (usersContainer && !localCollapsedState[groupId]) {
+                    usersContainer.classList.remove('collapsed');
+                }
+                return;
+            }
+
             const newOrderIds = Array.from(usersContainer.children).map(el => el.dataset.groupId).filter(id => id !== undefined);
             newOrderIds.forEach((groupId, index) => {
                 const group = state.groups.find(g => g.id === groupId);
@@ -153,6 +184,8 @@ function initGroupSortable() {
                     window.firestore.setDoc(docRef, { order: index }, { merge: true }).catch(console.error);
                 }
             });
+
+            requestRender();
         }
     });
 }
@@ -184,14 +217,16 @@ function initUserDragAndDrop() {
                 const groupId = groupBlock.dataset.groupId;
                 const group = state.groups.find(g => g.id === groupId);
 
-                if (group && group.isCollapsed) {
+                // Если группа свернута (по базе или локально), разворачиваем
+                const isCollapsed = localCollapsedState[groupId] !== undefined ? localCollapsedState[groupId] : (group && group.isCollapsed);
+
+                if (isCollapsed) {
                     const usersContainer = groupBlock.querySelector('.group-users');
                     if (usersContainer) {
                         usersContainer.classList.remove('collapsed');
                         const toggleBtn = groupBlock.querySelector('.toggle-group-btn');
                         if (toggleBtn) toggleBtn.textContent = '▲';
-                        group.isCollapsed = false;
-                        // Здесь тоже не сохраняем в базу, чтобы не сбить настройки
+                        localCollapsedState[groupId] = false; // Обновляем локально
                     }
                 }
             },
@@ -246,10 +281,17 @@ document.getElementById('btn-add-user').addEventListener('click', async () => {
     };
 
     const ungrouped = state.groups.find(g => g.id === 'ungrouped');
-    if (ungrouped && ungrouped.isCollapsed) {
-        ungrouped.isCollapsed = false;
-        const ungroupedDocRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", "ungrouped");
-        await window.firestore.setDoc(ungroupedDocRef, { isCollapsed: false }, { merge: true });
+    const isUngroupedCollapsed = localCollapsedState['ungrouped'] !== undefined ? localCollapsedState['ungrouped'] : (ungrouped && ungrouped.isCollapsed);
+
+    if (isUngroupedCollapsed) {
+        localCollapsedState['ungrouped'] = false; // Разворачиваем локально
+        const ungroupedBlock = document.querySelector(`.group-block[data-group-id="ungrouped"]`);
+        if (ungroupedBlock) {
+            const container = ungroupedBlock.querySelector('.group-users');
+            if (container) container.classList.remove('collapsed');
+            const btn = ungroupedBlock.querySelector('.toggle-group-btn');
+            if (btn) btn.textContent = '▲';
+        }
     }
 
     state.users = [...state.users, newUser];
