@@ -85,14 +85,15 @@ export function updateCalendarVacations(scheduleSave, requestRender, renderUserC
                 dayDiv.appendChild(span);
             });
         } else {
-            const isTwoDigit = (people.length - 2) > 9;
-            const dotsToRender = isTwoDigit ? people.slice(0, 1) : people.slice(0, 2);
+            // Больше 3 отпускников: 3 точки + «+N»
+            const dotsToRender = people.slice(0, 3);
+            const plusCount = people.length - dotsToRender.length;
 
             dotsToRender.forEach((person, idx) => {
                 const span = document.createElement('span');
                 span.classList.add('calendar__span');
                 span.style.backgroundColor = person.color;
-                span.style.left = isTwoDigit ? '30%' : `${25 + idx * 25}%`;
+                span.style.left = `${16 + idx * 22}%`;
 
                 span.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -104,8 +105,8 @@ export function updateCalendarVacations(scheduleSave, requestRender, renderUserC
 
             const plusText = document.createElement('div');
             plusText.classList.add('calendar__span-plus');
-            plusText.textContent = `+${people.length - dotsToRender.length}`;
-            plusText.style.cssText = `position: absolute; bottom: 2px; left: ${isTwoDigit ? '60%' : '75%'}; transform: translateX(-50%); font-size: 10px; color: var(--text-secondary); font-weight: bold; cursor: pointer; line-height: 1; z-index: 6;`;
+            plusText.textContent = `+${plusCount}`;
+            if (plusCount > 9) plusText.style.fontSize = '9px';
 
             plusText.addEventListener('click', (e) => {
                 e.stopPropagation();

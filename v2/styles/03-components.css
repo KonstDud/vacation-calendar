@@ -366,7 +366,9 @@
 
 .form__user-totals {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
+    gap: 2px 12px;
     margin-top: 6px;
     padding-top: 6px;
     border-top: 1px dashed var(--border-color);
@@ -402,4 +404,33 @@
     padding: 0 !important;
     overflow: hidden;
     border-top: none;
+}
+
+/* --- Предупреждения по сотруднику (нормы ТК: 28 дней, часть не менее 14) --- */
+.form__user-alerts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form__user-alert {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+
+.form__user-alert svg {
+    flex-shrink: 0;
+}
+
+.form__user-alert_error {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
 }

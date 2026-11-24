@@ -58,12 +58,15 @@ function applyRemoteUsers(users) {
     emitChange();
 }
 
-function flushPendingRemote() {
-    if (state._pendingRemote) {
-        state.users = state._pendingRemote;
-        state._pendingRemote = null;
-        emitChange();
-    }
+export function flushPendingRemote() {
+    if (!state._pendingRemote) return;
+    // Пока пользователь что-то вводит — не перерисовываем, применим после focusout.
+    if (isUserTypingNow()) return;
+
+    state.users = state._pendingRemote;
+    state._pendingRemote = null;
+    state.loading = false;
+    emitChange();
 }
 
 document.addEventListener("focusout", () => setTimeout(flushPendingRemote, 50), true);
@@ -94,7 +97,8 @@ async function startSubscription(year) {
         users.sort((a, b) => a.order - b.order);
 
         if (state._localEditing) {
-            console.log('[state] localEditing, skipping snapshot');
+            // Локальные правки ещё не сохранены: не теряем данные, применим после сохранения.
+            state._pendingRemote = users;
             return;
         }
 

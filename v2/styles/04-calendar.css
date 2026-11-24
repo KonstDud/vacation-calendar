@@ -100,10 +100,10 @@
     background: rgba(59, 130, 246, 0.4) !important;
 }
 
-/* Точки отпусков */
+/* Точки отпусков (позиция задаётся инлайново в calendar-grid.js) */
 .calendar__span {
     position: absolute;
-    bottom: 4px;
+    bottom: 3px;
     width: 6px;
     /* Чуть увеличили */
     height: 6px;
@@ -111,33 +111,24 @@
     display: inline-block;
     cursor: pointer;
     z-index: 6;
-}
-
-.calendar__span:nth-child(1) {
-    left: 20%;
     transform: translateX(-50%);
 }
 
-.calendar__span:nth-child(2) {
-    left: 50%;
-    transform: translateX(-50%);
+/* Счётчик «+N» в правом нижнем углу дня */
+.calendar__span-plus {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 6;
 }
 
-.calendar__span:nth-child(3) {
-    left: 80%;
-    transform: translateX(-50%);
-}
-
-.calendar__span:nth-child(4) {
-    left: 35%;
-    transform: translateX(-50%);
-    bottom: 12px;
-}
-
-.calendar__span:nth-child(5) {
-    left: 65%;
-    transform: translateX(-50%);
-    bottom: 12px;
+.calendar__span-plus:hover {
+    color: var(--text-primary);
 }
 
 /* --- ТУЛТИП --- */

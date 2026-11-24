@@ -1,8 +1,166 @@
 // scripts/calendar-interactions.js
 
-import { state } from './state.js';
+import { state, stateEvents } from './state.js';
 
 let selectionStart = null;
+
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+// Группирует сотрудников по группам для выпадающего списка.
+// query — фильтр по имени, selectedId — выбранный сотрудник (его не скрываем даже при фильтре).
+function buildUserGroups(query = '', selectedId = '') {
+    const UNGROUPED_ID = 'ungrouped';
+    const normalized = String(query || '').trim().toLowerCase();
+    const isMatch = (user) => !normalized
+        || String(user.name || '').toLowerCase().includes(normalized)
+        || user.id === selectedId;
+
+    const groups = [...state.groups].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const knownIds = new Set(groups.map(g => g.id));
+
+    const byGroup = new Map();
+    state.users.forEach(user => {
+        if (!isMatch(user)) return;
+        const groupId = (user.groupId && knownIds.has(user.groupId)) ? user.groupId : UNGROUPED_ID;
+        if (!byGroup.has(groupId)) byGroup.set(groupId, []);
+        byGroup.get(groupId).push(user);
+    });
+
+    const result = [];
+    groups.forEach(group => {
+        const users = byGroup.get(group.id) || [];
+        if (users.length > 0) result.push({ label: group.name, users });
+    });
+
+    // Сотрудники без группы (в т.ч. если документа 'ungrouped' ещё нет в базе)
+    if (!knownIds.has(UNGROUPED_ID)) {
+        const rest = byGroup.get(UNGROUPED_ID) || [];
+        if (rest.length > 0) result.push({ label: 'Без группы', users: rest });
+    }
+
+    return result;
+}
+
+// HTML выпадающего списка: заголовки групп + кликабельные строки сотрудников
+function buildUsersListHtml(groups, activeIndex) {
+    let flatIndex = -1;
+
+    const html = groups.map(group => {
+        const options = group.users.map(user => {
+            flatIndex += 1;
+            const active = flatIndex === activeIndex ? ' userselect__option_active' : '';
+            const color = escapeHtml(user.color || '#888888');
+            return `<div class="userselect__option${active}" role="option" data-id="${escapeHtml(user.id)}">
+                <span class="userselect__dot" style="background:${color}"></span>${escapeHtml(user.name)}
+            </div>`;
+        }).join('');
+
+        return `<div class="userselect__group">${escapeHtml(group.label)}</div>${options}`;
+    }).join('');
+
+    return html || '<div class="userselect__empty">Ничего не найдено</div>';
+}
+
+// Комбобокс выбора сотрудника: поиск по имени, группировка, мышь и клавиатура
+function setupUserCombobox(root) {
+    const input = root.querySelector('#popup-user-input');
+    const list = root.querySelector('#popup-user-list');
+    const clearBtn = root.querySelector('#popup-user-clear');
+
+    let selectedId = '';
+    let groups = [];
+    let flatUsers = [];
+    let activeIndex = -1;
+
+    const isOpen = () => list.classList.contains('userselect__list_opened');
+
+    const renderList = () => {
+        list.innerHTML = buildUsersListHtml(groups, activeIndex);
+        const active = list.querySelector('.userselect__option_active');
+        if (active) active.scrollIntoView({ block: 'nearest' });
+    };
+
+    const openList = (resetActive) => {
+        groups = buildUserGroups(input.value, selectedId);
+        flatUsers = groups.flatMap(group => group.users);
+        if (resetActive) activeIndex = -1;
+        if (activeIndex > flatUsers.length - 1) activeIndex = flatUsers.length - 1;
+        renderList();
+        list.classList.add('userselect__list_opened');
+    };
+
+    const closeList = () => {
+        list.classList.remove('userselect__list_opened');
+        activeIndex = -1;
+    };
+
+    const selectUser = (user) => {
+        selectedId = user.id;
+        input.value = user.name;
+        clearBtn.classList.add('userselect__clear_visible');
+        closeList();
+        input.blur();
+    };
+
+    input.addEventListener('focus', () => openList(false));
+
+    input.addEventListener('input', () => {
+        selectedId = '';
+        clearBtn.classList.toggle('userselect__clear_visible', input.value.length > 0);
+        openList(true);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (!isOpen()) openList(true);
+            activeIndex = Math.min(activeIndex + 1, flatUsers.length - 1);
+            renderList();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            renderList();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const user = flatUsers[activeIndex] || flatUsers[0];
+            if (user) selectUser(user);
+        } else if (e.key === 'Escape') {
+            closeList();
+        }
+    });
+
+    // mousedown, а не click: поле ввода не теряет фокус до обработки выбора
+    list.addEventListener('mousedown', (e) => {
+        const option = e.target.closest('.userselect__option[data-id]');
+        if (!option) return;
+        e.preventDefault();
+        const user = state.users.find(u => u.id === option.dataset.id);
+        if (user) selectUser(user);
+    });
+
+    clearBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectedId = '';
+        input.value = '';
+        clearBtn.classList.remove('userselect__clear_visible');
+        input.focus();
+    });
+
+    const onDocumentMouseDown = (e) => {
+        if (!root.contains(e.target)) closeList();
+    };
+    document.addEventListener('mousedown', onDocumentMouseDown);
+
+    return {
+        getSelectedId: () => selectedId,
+        getTypedValue: () => input.value,
+        destroy: () => document.removeEventListener('mousedown', onDocumentMouseDown)
+    };
+}
 
 export function initCalendarInteractions() {
     const calendarContainer = document.getElementById('calendar-container');
@@ -116,11 +274,10 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
         <div class="popup__add-form">
             <div class="popup__add-title">${existingVacations.length > 0 ? 'Добавить еще один отпуск' : 'Оформить отпуск'}</div>
             <label style="font-size: 13px; color: var(--text-muted);">Выберите сотрудника</label>
-            <div class="select-wrapper">
-                <select id="popup-user-select" class="form__date">
-                    <option value="">-- Выберите --</option>
-                    ${state.users.map(u => `<option value="${u.id}">${u.name}</option>`).join('')}
-                </select>
+            <div class="userselect">
+                <input type="text" class="userselect__input" id="popup-user-input" placeholder="Начните вводить имя..." autocomplete="off" />
+                <button type="button" class="userselect__clear" id="popup-user-clear" title="Очистить">✕</button>
+                <div class="userselect__list" id="popup-user-list"></div>
             </div>
             <div id="popup-error" style="color: var(--accent-red); font-size: 12px; display: none;"></div>
 
@@ -128,12 +285,16 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
         </div>
     `;
 
+    // Комбобокс выбора сотрудника (нужен closePopup для снятия слушателей)
+    const combo = setupUserCombobox(popupContent);
+
     popup.classList.add('popup_opened');
 
     const closePopup = () => {
         popup.classList.remove('popup_opened');
         clearSelection();
         popup.removeEventListener('mousedown', onMouseDown);
+        combo.destroy();
     };
 
     const onMouseDown = (e) => {
@@ -157,7 +318,7 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
                 const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "users", userId);
                 const { id, ...dataToSave } = user;
                 await window.firestore.setDoc(docRef, dataToSave, { merge: true });
-                window.dispatchEvent(new Event('statechange'));
+                stateEvents.dispatchEvent(new Event('statechange'));
                 item.remove();
             } catch (error) {
                 console.error('Ошибка удаления:', error);
@@ -167,12 +328,19 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
 
     const saveBtn = document.getElementById('popup-save-btn');
     saveBtn.onclick = async () => {
-        const userId = document.getElementById('popup-user-select').value;
         const errorDiv = document.getElementById('popup-error');
         errorDiv.style.display = 'none';
 
+        // Сотрудник должен быть выбран из списка; если введено точное имя — принимаем его
+        let userId = combo.getSelectedId();
         if (!userId) {
-            errorDiv.textContent = 'Пожалуйста, выберите сотрудника';
+            const typed = combo.getTypedValue().trim().toLowerCase();
+            const exact = typed ? state.users.filter(u => String(u.name).toLowerCase() === typed) : [];
+            if (exact.length === 1) userId = exact[0].id;
+        }
+
+        if (!userId) {
+            errorDiv.textContent = 'Выберите сотрудника из списка';
             errorDiv.style.display = 'block';
             return;
         }
@@ -210,7 +378,7 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
             await window.firestore.setDoc(docRef, dataToSave, { merge: true });
 
             closePopup();
-            window.dispatchEvent(new Event('statechange'));
+            stateEvents.dispatchEvent(new Event('statechange'));
 
         } catch (error) {
             console.error('Ошибка сохранения:', error);

@@ -6,12 +6,9 @@ import {
     doc,
     setDoc,
     getDoc,
-    getDocs,
     deleteDoc,
     onSnapshot,
     query,
-    orderBy,           // <--- ДОБАВИЛИ
-    runTransaction,
     persistentLocalCache // <--- НОВЫЙ КЭШ
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
@@ -37,14 +34,11 @@ window.firestore = {
     doc,
     setDoc,
     getDoc,
-    getDocs,
     deleteDoc,
     onSnapshot,
     query,
-    orderBy,
-    runTransaction,
 };
 
 window.firebaseReady = Promise.resolve(db);
 
-export { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy, runTransaction };
+export { db, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query };

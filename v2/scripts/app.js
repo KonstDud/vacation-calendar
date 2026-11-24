@@ -4,7 +4,7 @@ import { state, initState, stateEvents, getAvailableYears, updateGroup } from '.
 import { renderCalendar } from './calendar.js';
 import { initCalendarInteractions } from './calendar-interactions.js';
 import { initGroupsUI } from './groups.js';
-import { renderUserCard, scheduleSave, getUserDoc } from './user-card.js';
+import { renderUserCard, scheduleSave } from './user-card.js';
 import { updateCalendarVacations as renderCalendarVacations } from './calendar-grid.js';
 import { getIconEye, getIconEyeOff } from './utils.js';
 
@@ -154,6 +154,8 @@ function initGroupSortable() {
     groupSortableInstance = new Sortable(usersContainer, {
         animation: 150,
         handle: '.group-header',
+        filter: '.toggle-group-btn, .toggle-group-visibility, .group-color-picker-inline',
+        preventOnFilter: false,
         ghostClass: 'group-block-ghost',
 
         onStart: function (evt) {
@@ -324,8 +326,11 @@ if (yearSelect) {
     });
 }
 
-ensureUngroupedGroup().then(() => {
-    initGroupsUI();
-    initCalendarInteractions();
-    initState();
-});
+// Без авторизации приложение не инициализируем (index.html уже уводит на login.html)
+if (sessionStorage.getItem('vacationAuth')) {
+    ensureUngroupedGroup().then(() => {
+        initGroupsUI();
+        initCalendarInteractions();
+        initState();
+    });
+}

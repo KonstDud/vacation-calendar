@@ -15,7 +15,7 @@
 <body class="page">
     <script>
         if (!sessionStorage.getItem('vacationAuth')) {
-            window.location.href = 'login.html';
+            window.location.replace('login.html');
         }
     </script>
 
@@ -41,7 +41,7 @@
                 </div>
                 <div class="header__titles">
                     <h1 class="header__title" id="header-title">График отпусков</h1>
-                    <span class="header__badge" id="header-year">2027</span>
+                    <span class="header__badge" id="header-year"></span>
                 </div>
             </div>
 

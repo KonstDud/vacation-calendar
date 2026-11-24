@@ -1,23 +1,64 @@
 // scripts/user-card.js
-import { state } from './state.js';
+import { state, flushPendingRemote } from './state.js';
 import { getCalendarDays, getWorkingDays, validateInternalOverlap, getExternalOverlaps, getIconEye, getIconEyeOff, getIconWarning, getIconDrag } from './utils.js';
+
+// Нормы ТК РФ: 28 календарных дней отпуска в году, одна из частей — не менее 14
+const ANNUAL_LEAVE_DAYS = 28;
+const MIN_LEAVE_PART = 14;
 
 export const getUserDoc = (year, userId) => window.firestore.doc(window.db, "vacationData_v2", String(year), "users", userId);
 
-export const scheduleSave = (userId, userData, requestRender) => {
-    state._localEditing = true;
+const SAVE_DEBOUNCE_MS = 800;
+const saveTimeouts = {};    // userId -> id таймера (есть отложенная запись)
+const pendingData = {};     // userId -> объект пользователя с несохранёнными правками
+const inFlight = new Set(); // userId, для которых запись уже выполняется
+
+const isSavingIdle = () => Object.keys(saveTimeouts).length === 0 && inFlight.size === 0;
+
+const writeUser = async (userId) => {
+    const userData = pendingData[userId];
+    delete pendingData[userId];
+    if (!userData) return;
+
     const { id, ...dataToSave } = userData;
-    window.firestore.setDoc(getUserDoc(state.year, userId), dataToSave, { merge: true })
-        .catch(console.error)
-        .finally(() => {
-            state._localEditing = false;
-            if (state._pendingRemote) {
-                state.users = state._pendingRemote;
-                state._pendingRemote = null;
-                requestRender();
-            }
-        });
+    inFlight.add(userId);
+    try {
+        await window.firestore.setDoc(getUserDoc(state.year, userId), dataToSave, { merge: true });
+    } catch (e) {
+        console.error('[user-card] Ошибка сохранения:', e);
+    } finally {
+        inFlight.delete(userId);
+        // Блокировку снимаем только когда не осталось ни таймеров, ни записей
+        state._localEditing = !isSavingIdle();
+        if (!state._localEditing) flushPendingRemote();
+    }
 };
+
+export const scheduleSave = (userId, userData) => {
+    state._localEditing = true;
+    pendingData[userId] = userData;
+
+    if (saveTimeouts[userId]) clearTimeout(saveTimeouts[userId]);
+
+    saveTimeouts[userId] = setTimeout(() => {
+        delete saveTimeouts[userId];
+        writeUser(userId);
+    }, SAVE_DEBOUNCE_MS);
+};
+
+// Не теряем недописанные правки при уходе со страницы или переключении вкладки
+const flushPendingSavesNow = () => {
+    Object.keys(saveTimeouts).forEach(userId => {
+        clearTimeout(saveTimeouts[userId]);
+        delete saveTimeouts[userId];
+        writeUser(userId);
+    });
+};
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingSavesNow();
+});
+window.addEventListener('pagehide', flushPendingSavesNow);
 
 export function renderUserCard(user, requestRender, updateCalendarVacations) {
     const oldContainer = document.getElementById(`user-card-${user.id}`);
@@ -26,14 +67,6 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     const isVisible = user.isVisible !== false;
     const isHidden = user.isHidden === true;
     const displayVacations = user.vacations || [];
-
-    let totalCalDays = 0; let totalWorkDays = 0;
-    displayVacations.forEach(vac => {
-        if (vac.startDate && vac.endDate && vac.endDate >= vac.startDate) {
-            totalCalDays += getCalendarDays(vac.startDate, vac.endDate);
-            totalWorkDays += getWorkingDays(vac.startDate, vac.endDate);
-        }
-    });
 
     // Проверяем видимость группы
     let groupIsVisible = true;
@@ -91,12 +124,8 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
         ${!isHidden ? `
             <div class="form__vacations-list" id="vacations-list-${user.id}"></div>
             <button type="button" class="btn btn_small add-vac-btn">+ Добавить отпуск</button>
-            ${displayVacations.length > 0 ? `
-                <div class="form__user-totals">
-                    <span>Итого календарных: <b>${totalCalDays}</b></span>
-                    <span>Итого рабочих: <b>${totalWorkDays}</b></span>
-                </div>
-            ` : ''}
+            <div class="form__user-alerts" id="user-alerts-${user.id}"></div>
+            <div class="form__user-totals" id="user-totals-${user.id}"></div>
         ` : ''}
     `;
 
@@ -154,6 +183,43 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
 
     if (!isHidden) {
         const vacList = wrapper.querySelector('.form__vacations-list');
+        const alertsEl = wrapper.querySelector('.form__user-alerts');
+        const totalsEl = wrapper.querySelector('.form__user-totals');
+
+        // Итого по сотруднику + валидация требований ТК
+        const refreshSummary = () => {
+            const parts = displayVacations
+                .filter(v => v.startDate && v.endDate && v.endDate >= v.startDate)
+                .map(v => getCalendarDays(v.startDate, v.endDate));
+
+            const totalCalDays = parts.reduce((sum, n) => sum + n, 0);
+            const totalWorkDays = displayVacations.reduce((sum, v) => sum + getWorkingDays(v.startDate, v.endDate), 0);
+
+            if (parts.length === 0) {
+                totalsEl.style.display = 'none';
+            } else {
+                totalsEl.style.display = 'flex';
+                totalsEl.innerHTML = `
+                    <span>Календарных: <b>${totalCalDays}</b> / ${ANNUAL_LEAVE_DAYS}</span>
+                    <span>Рабочих: <b>${totalWorkDays}</b></span>
+                `;
+            }
+
+            const alerts = [];
+            if (totalCalDays > ANNUAL_LEAVE_DAYS) {
+                alerts.push({ text: `Превышение: ${totalCalDays} из ${ANNUAL_LEAVE_DAYS} календарных дней.`, error: true });
+            }
+            if (parts.length > 1 && !parts.some(n => n >= MIN_LEAVE_PART)) {
+                alerts.push({ text: `Одна из частей отпуска должна быть не менее ${MIN_LEAVE_PART} календарных дней.`, error: false });
+            }
+
+            alertsEl.innerHTML = alerts
+                .map(a => `<div class="form__user-alert${a.error ? ' form__user-alert_error' : ''}">${getIconWarning()} ${a.text}</div>`)
+                .join('');
+        };
+
+        refreshSummary();
+
         displayVacations.forEach(vac => {
             const vacDiv = document.createElement('div');
             vacDiv.className = `form__vacation`;
@@ -207,18 +273,20 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
 
             inputs[0].addEventListener('input', (e) => {
                 vac.startDate = e.target.value;
-                scheduleSave(user.id, user, requestRender);
+                scheduleSave(user.id, user);
                 updateCalendarVacations();
                 updateValidation();
                 vacDiv.querySelector('.form__vacation-days').textContent = `${getCalendarDays(vac.startDate, vac.endDate)} кал. / ${getWorkingDays(vac.startDate, vac.endDate)} раб.`;
+                refreshSummary();
             });
 
             inputs[1].addEventListener('input', (e) => {
                 vac.endDate = e.target.value;
-                scheduleSave(user.id, user, requestRender);
+                scheduleSave(user.id, user);
                 updateCalendarVacations();
                 updateValidation();
                 vacDiv.querySelector('.form__vacation-days').textContent = `${getCalendarDays(vac.startDate, vac.endDate)} кал. / ${getWorkingDays(vac.startDate, vac.endDate)} раб.`;
+                refreshSummary();
             });
 
             vacDiv.querySelector('.btn_icon.delete').addEventListener('click', (e) => {
