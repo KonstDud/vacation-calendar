@@ -218,6 +218,13 @@
     opacity: 1;
 }
 
+/* Подсветка отпусков сотрудника при наведении на его карточку в панели */
+.calendar__day--user-hover {
+    background: rgba(59, 130, 246, 0.14) !important;
+    outline: 2px solid var(--user-hover-color, var(--accent-blue));
+    outline-offset: -2px;
+}
+
 .calendar__day--highlighted {
     background: rgba(59, 130, 246, 0.3) !important;
     border: 1px solid var(--accent-blue) !important;

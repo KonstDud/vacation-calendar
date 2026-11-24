@@ -3,6 +3,8 @@ import { state } from './state.js';
 import { countDaysFromYearStart } from './utils.js';
 
 export function updateCalendarVacations(scheduleSave, requestRender, renderUserCard) {
+    clearUserVacationHighlight();
+
     document.querySelectorAll('.calendar__day--highlighted, .calendar__day--to-delete').forEach(d => d.classList.remove('calendar__day--highlighted', 'calendar__day--to-delete'));
     document.querySelectorAll('.calendar__span, .calendar__span-plus, .calendar__simple-tooltip').forEach(el => el.remove());
 
@@ -201,4 +203,44 @@ function openPopover(e, people, scheduleSave, requestRender, renderUserCard) {
     setTimeout(() => {
         document.addEventListener('mousedown', closePopover);
     }, 10);
+}
+
+// --- Подсветка отпусков сотрудника при наведении на его карточку в панели ---
+
+const USER_HOVER_CLASS = 'calendar__day--user-hover';
+
+function isUserShownOnCalendar(user) {
+    if (!user || user.isVisible === false) return false;
+
+    const group = state.groups.find(g => g.id === (user.groupId || 'ungrouped'));
+    return !group || group.isVisible !== false;
+}
+
+// Подсвечивает все дни отпусков сотрудника (только если он сам показан на календаре)
+export function highlightUserVacations(user) {
+    clearUserVacationHighlight();
+    if (!isUserShownOnCalendar(user)) return;
+
+    const color = user.color || '#3b82f6';
+
+    (user.vacations || []).forEach(vac => {
+        if (!vac.startDate || !vac.endDate || vac.endDate < vac.startDate) return;
+
+        const startIndex = countDaysFromYearStart(vac.startDate, state.year);
+        const endIndex = countDaysFromYearStart(vac.endDate, state.year);
+
+        for (let i = startIndex; i <= endIndex; i++) {
+            const dayDiv = document.getElementById(`dayid_${i}`);
+            if (!dayDiv) continue;
+            dayDiv.style.setProperty('--user-hover-color', color);
+            dayDiv.classList.add(USER_HOVER_CLASS);
+        }
+    });
+}
+
+export function clearUserVacationHighlight() {
+    document.querySelectorAll(`.${USER_HOVER_CLASS}`).forEach(dayDiv => {
+        dayDiv.classList.remove(USER_HOVER_CLASS);
+        dayDiv.style.removeProperty('--user-hover-color');
+    });
 }

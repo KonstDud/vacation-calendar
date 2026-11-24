@@ -1,6 +1,7 @@
 // scripts/user-card.js
-import { state, flushPendingRemote } from './state.js';
+import { state, discardPendingRemote } from './state.js';
 import { getCalendarDays, getWorkingDays, validateInternalOverlap, getExternalOverlaps, getIconEye, getIconEyeOff, getIconWarning, getIconDrag } from './utils.js';
+import { highlightUserVacations, clearUserVacationHighlight } from './calendar-grid.js';
 
 // Нормы ТК РФ: 28 календарных дней отпуска в году, одна из частей — не менее 14
 const ANNUAL_LEAVE_DAYS = 28;
@@ -30,7 +31,10 @@ const writeUser = async (userId) => {
         inFlight.delete(userId);
         // Блокировку снимаем только когда не осталось ни таймеров, ни записей
         state._localEditing = !isSavingIdle();
-        if (!state._localEditing) flushPendingRemote();
+        if (!state._localEditing) {
+            // Снапшот, пришедший во время правок, устарел — свежий придёт после записи
+            discardPendingRemote();
+        }
     }
 };
 
@@ -130,6 +134,10 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     `;
 
     oldContainer.replaceWith(wrapper);
+
+    // Наведение на карточку подсвечивает на календаре все отпуска сотрудника
+    wrapper.addEventListener('mouseenter', () => highlightUserVacations(user));
+    wrapper.addEventListener('mouseleave', clearUserVacationHighlight);
 
     const eyeBtn = wrapper.querySelector('.eye-btn');
     if (eyeBtn && !eyeDisabled) {

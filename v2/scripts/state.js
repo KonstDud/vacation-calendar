@@ -60,13 +60,20 @@ function applyRemoteUsers(users) {
 
 export function flushPendingRemote() {
     if (!state._pendingRemote) return;
-    // Пока пользователь что-то вводит — не перерисовываем, применим после focusout.
-    if (isUserTypingNow()) return;
+    // Пока пользователь вводит или есть несохранённые правки, применять снапшот нельзя:
+    // он может быть старше локальных изменений и «откатит» карточку назад.
+    if (isUserTypingNow() || state._localEditing) return;
 
     state.users = state._pendingRemote;
     state._pendingRemote = null;
     state.loading = false;
     emitChange();
+}
+
+// Отложенный снапшот устарел (во время него были локальные правки) — отбрасываем.
+// Свежие данные придут снапшотом после завершения записи.
+export function discardPendingRemote() {
+    state._pendingRemote = null;
 }
 
 document.addEventListener("focusout", () => setTimeout(flushPendingRemote, 50), true);
