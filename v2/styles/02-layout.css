@@ -356,3 +356,12 @@
     min-width: 32px;
     margin-left: 4px;
 }
+
+/* Группа скрыта лично у меня — приглушаем заголовок, чтобы это было видно */
+.group-block[data-group-hidden="true"] .group-name {
+    opacity: 0.5;
+}
+
+.group-block[data-group-hidden="true"] .group-color-picker-inline {
+    opacity: 0.4;
+}

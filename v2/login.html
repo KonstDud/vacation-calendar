@@ -2,131 +2,113 @@
 <html lang="ru">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход в График отпусков</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: #f0f0f0;
-        }
-
-        .login-container {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 300px;
-        }
-
-        h1 {
-            margin: 0 0 1rem;
-            text-align: center;
-        }
-
-        input {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-
-        button {
-            width: 100%;
-            padding: 10px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        button:hover {
-            background: #0056b3;
-        }
-
-        .error {
-            color: red;
-            font-size: 14px;
-            margin-top: 10px;
-            display: none;
-        }
-    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./vendor/normalize.css" />
+    <link rel="stylesheet" href="./style.css" />
+    <title>Вход — График отпусков</title>
 </head>
 
-<body>
-    <div class="login-container">
-        <h1>Вход в График отпусков</h1>
-        <p>Введите общий пароль для команды:</p>
-        <input type="password" id="passwordInput" placeholder="Пароль">
-        <button id="loginButton">Войти</button>
-        <div class="error" id="errorText">Неверный пароль</div>
-    </div>
+<body class="login-page">
+    <main class="login">
+        <div class="login__brand">
+            <div class="header__logo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 256 256">
+                    <rect width="256" height="256" fill="none" />
+                    <rect x="32" y="48" width="192" height="160" rx="8" fill="none" stroke="#ffffff"
+                        stroke-linecap="round" stroke-linejoin="round" stroke-width="16" />
+                    <line x1="176" y1="24" x2="176" y2="56" fill="none" stroke="#ffffff" stroke-linecap="round"
+                        stroke-linejoin="round" stroke-width="16" />
+                    <line x1="80" y1="24" x2="80" y2="56" fill="none" stroke="#ffffff" stroke-linecap="round"
+                        stroke-linejoin="round" stroke-width="16" />
+                    <line x1="32" y1="88" x2="224" y2="88" fill="none" stroke="#ffffff" stroke-linecap="round"
+                        stroke-linejoin="round" stroke-width="16" />
+                    <path d="M176,136a24,24,0,1,1-24-24A24,24,0,0,1,176,136Z" opacity="0.4" fill="#ffffff" />
+                    <path d="M128,136a24,24,0,1,1-24-24A24,24,0,0,1,128,136Z" opacity="0.4" fill="#ffffff" />
+                    <path d="M80,184a24,24,0,1,1-24-24A24,24,0,0,1,80,184Z" opacity="0.4" fill="#ffffff" />
+                </svg>
+            </div>
+            <h1 class="login__title">График отпусков</h1>
+        </div>
 
-    <!-- Подключаем Firebase -->
+        <div class="login__card" id="login-card">
+            <!-- Шаг 1: общий пароль команды -->
+            <section class="login__step" id="step-team">
+                <h2 class="login__step-title">Вход в систему</h2>
+                <p class="login__hint">Введите общий пароль команды</p>
+                <input type="password" class="login__input" id="team-password" placeholder="Пароль команды"
+                    autocomplete="current-password" />
+                <button type="button" class="btn btn_add login__submit" id="team-submit">Продолжить</button>
+                <div class="login__error" id="team-error" hidden></div>
+            </section>
+
+            <!-- Шаг 2: кто вы -->
+            <section class="login__step" id="step-user" hidden>
+                <h2 class="login__step-title">Кто вы?</h2>
+
+                <div class="login__last" id="login-last" hidden>
+                    <p class="login__hint">С прошлого раза:</p>
+                    <button type="button" class="btn btn_add login__submit" id="login-last-btn">Продолжить как <span id="login-last-name"></span></button>
+                    <button type="button" class="login__link" id="login-other">Войти как другой сотрудник</button>
+                </div>
+
+                <div class="login__who" id="login-who">
+                    <p class="login__hint">Найдите себя в списке — по группам или поиском по имени</p>
+
+                    <div class="userselect">
+                        <input type="text" class="userselect__input" id="login-user-input"
+                            placeholder="Начните вводить имя..." autocomplete="off" />
+                        <button type="button" class="userselect__clear" id="login-user-clear" title="Очистить">✕</button>
+                        <div class="userselect__list" id="login-user-list"></div>
+                    </div>
+
+                    <div class="login__password" id="login-password-block" hidden>
+                        <p class="login__hint login__hint-small" id="login-password-hint"></p>
+                        <input type="password" class="login__input" id="login-password" placeholder="Пароль"
+                            autocomplete="off" />
+                        <input type="password" class="login__input" id="login-password2" placeholder="Повторите пароль"
+                            autocomplete="off" hidden />
+                    </div>
+
+                    <button type="button" class="btn btn_add login__submit" id="user-submit">Войти</button>
+                    <div class="login__error" id="user-error" hidden></div>
+                    <p class="login__hint login__hint-small">Забыли пароль? Обратитесь к администратору.</p>
+                    <button type="button" class="login__link" id="reg-start">Меня нет в списке — добавиться</button>
+                </div>
+
+                <!-- Новый сотрудник: создаёт себя и задаёт пароль -->
+                <div class="login__reg" id="reg-block" hidden>
+                    <p class="login__hint">Новый сотрудник. Укажите имя — и придумайте себе пароль.</p>
+                    <input type="text" class="login__input" id="reg-name" placeholder="Фамилия Имя Отчество" autocomplete="off" />
+                    <select class="login__input" id="reg-group"></select>
+                    <input type="password" class="login__input" id="reg-password" placeholder="Придумайте пароль" autocomplete="off" />
+                    <input type="password" class="login__input" id="reg-password2" placeholder="Повторите пароль" autocomplete="off" />
+                    <button type="button" class="btn btn_add login__submit" id="reg-submit">Создать и войти</button>
+                    <div class="login__error" id="reg-error" hidden></div>
+                    <button type="button" class="login__link" id="reg-cancel">← Назад</button>
+                </div>
+
+                <button type="button" class="login__link" id="to-admin">Войти как администратор</button>
+            </section>
+
+            <!-- Шаг 3: администратор -->
+            <section class="login__step" id="step-admin" hidden>
+                <h2 class="login__step-title">Администратор</h2>
+                <p class="login__hint">Введите пароль администратора</p>
+                <input type="password" class="login__input" id="admin-password" placeholder="Пароль администратора"
+                    autocomplete="off" />
+                <button type="button" class="btn btn_add login__submit" id="admin-submit">Войти как администратор</button>
+                <div class="login__error" id="admin-error" hidden></div>
+                <button type="button" class="login__link" id="back-to-user">← Назад к выбору сотрудника</button>
+            </section>
+        </div>
+    </main>
+
     <script type="module" src="./firebase-config.js"></script>
-
-    <script>
-        // Загружаем хеш пароля из Firebase
-        async function getPasswordHash() {
-            try {
-                const docRef = window.firestore.doc(window.db, 'auth', 'password');
-                const docSnap = await window.firestore.getDoc(docRef);
-                if (docSnap.exists()) {
-                    return docSnap.data().hash;
-                }
-                return null;
-            } catch (error) {
-                console.error('Ошибка загрузки хеша:', error);
-                return null;
-            }
-        }
-
-        // Проверка пароля
-        async function checkPassword(enteredPassword) {
-            const correctHash = await getPasswordHash();
-            if (!correctHash) {
-                alert('Ошибка загрузки данных авторизации');
-                return false;
-            }
-
-            // Хешируем введённый пароль и сравниваем
-            const encoder = new TextEncoder();
-            const data = encoder.encode(enteredPassword);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const enteredHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-            return enteredHash === correctHash;
-        }
-
-        document.getElementById('loginButton').addEventListener('click', async () => {
-            const entered = document.getElementById('passwordInput').value;
-            const isValid = await checkPassword(entered);
-
-            if (isValid) {
-                sessionStorage.setItem('vacationAuth', 'true');
-                window.location.href = 'index.html';
-            } else {
-                document.getElementById('errorText').style.display = 'block';
-            }
-        });
-
-        // Вход по Enter
-        document.getElementById('passwordInput').addEventListener('keypress', async (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('loginButton').click();
-            }
-        });
-    </script>
+    <script type="module" src="./scripts/login.js"></script>
 </body>
 
 </html>

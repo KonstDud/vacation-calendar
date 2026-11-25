@@ -1,6 +1,8 @@
 // scripts/calendar-grid.js
 import { state } from './state.js';
 import { countDaysFromYearStart } from './utils.js';
+import { isUserHidden, isGroupHidden } from './view-prefs.js';
+import { canEditUser } from './auth.js';
 
 export function updateCalendarVacations(scheduleSave, requestRender, renderUserCard) {
     clearUserVacationHighlight();
@@ -14,18 +16,9 @@ export function updateCalendarVacations(scheduleSave, requestRender, renderUserC
     const dayData = {};
 
     state.users.forEach(user => {
-        if (user.isVisible === false) return;
-
-        // ИСПРАВЛЕННАЯ ПРОВЕРКА ГРУППЫ (включая ungrouped)
-        let group;
-        if (user.groupId) {
-            group = state.groups.find(g => g.id === user.groupId);
-        } else {
-            // Если groupId пустой, значит это "Без группы"
-            group = state.groups.find(g => g.id === 'ungrouped');
-        }
-
-        if (group && group.isVisible === false) return;
+        // Видимость — личная настройка (localStorage), а не общая для всех
+        if (isUserHidden(user.id)) return;
+        if (isGroupHidden(user.groupId || 'ungrouped')) return;
 
         (user.vacations || []).forEach(vac => {
             if (!vac.startDate || !vac.endDate) return;
@@ -186,7 +179,12 @@ function openPopover(e, people, scheduleSave, requestRender, renderUserCard) {
             if (currentPopover) currentPopover.remove();
         });
 
-        item.append(dot, name, delBtn);
+        // Крестик удаления — только для своих отпусков (админ — для всех)
+        if (canEditUser(person.userId)) {
+            item.append(dot, name, delBtn);
+        } else {
+            item.append(dot, name);
+        }
         popover.appendChild(item);
     });
 
@@ -210,10 +208,9 @@ function openPopover(e, people, scheduleSave, requestRender, renderUserCard) {
 const USER_HOVER_CLASS = 'calendar__day--user-hover';
 
 function isUserShownOnCalendar(user) {
-    if (!user || user.isVisible === false) return false;
-
-    const group = state.groups.find(g => g.id === (user.groupId || 'ungrouped'));
-    return !group || group.isVisible !== false;
+    if (!user) return false;
+    if (isUserHidden(user.id)) return false;
+    return !isGroupHidden(user.groupId || 'ungrouped');
 }
 
 // Подсвечивает все дни отпусков сотрудника (только если он сам показан на календаре)

@@ -2,6 +2,8 @@
 import { state, discardPendingRemote } from './state.js';
 import { getCalendarDays, getWorkingDays, validateInternalOverlap, getExternalOverlaps, getIconEye, getIconEyeOff, getIconWarning, getIconDrag } from './utils.js';
 import { highlightUserVacations, clearUserVacationHighlight } from './calendar-grid.js';
+import { canEditUser, canManageUsers } from './auth.js';
+import { isUserHidden, isGroupHidden, toggleUserHidden } from './view-prefs.js';
 
 // Нормы ТК РФ: 28 календарных дней отпуска в году, одна из частей — не менее 14
 const ANNUAL_LEAVE_DAYS = 28;
@@ -68,66 +70,68 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     const oldContainer = document.getElementById(`user-card-${user.id}`);
     if (!oldContainer) return;
 
-    const isVisible = user.isVisible !== false;
+    // Видимость — личная настройка (localStorage), у каждого своя
+    const isVisible = !isUserHidden(user.id);
     const isHidden = user.isHidden === true;
     const displayVacations = user.vacations || [];
+    const groupIsVisible = !isGroupHidden(user.groupId || 'ungrouped');
 
-    // Проверяем видимость группы
-    let groupIsVisible = true;
-    if (user.groupId) {
-        const group = state.groups.find(g => g.id === user.groupId);
-        if (group) groupIsVisible = group.isVisible !== false;
-    } else {
-        const ungrouped = state.groups.find(g => g.id === 'ungrouped');
-        if (ungrouped) groupIsVisible = ungrouped.isVisible !== false;
-    }
+    // Кто может править эту карточку: админ — любую, сотрудник — только свою
+    const editable = canEditUser(user.id);
+    const canManage = canManageUsers();
 
     const wrapper = document.createElement('div');
     wrapper.className = `form__user ${isHidden ? 'form__user_hidden' : ''}`;
     wrapper.id = `user-card-${user.id}`;
 
-    const colorOrPlaceholder = !isHidden
+    // Свой цвет меняется всегда (даже когда карточка свёрнута), чужой — только точка для просмотра
+    const colorElement = editable
         ? `<input type="color" class="form__color" value="${user.color}" />`
-        : `<div style="width: 16px; height: 16px; flex-shrink: 0;"></div>`;
+        : `<span class="form__color-dot" style="background: ${user.color || '#888888'};"></span>`;
 
-    let eyeIcon = '';
-    let eyeClass = '';
-    let eyeDisabled = false;
+    // «Глаз» — личный показ на календаре. Скрытая группа только приглушает кнопку,
+    // но не блокирует её: иначе состояние «залипает» и включить обратно нельзя.
+    let eyeIcon = isVisible
+        ? `<span style="color: var(--accent-green);">${getIconEye()}</span>`
+        : getIconEyeOff();
+    let eyeClass = isVisible ? '' : 'hidden';
+    let eyeTitle = isVisible ? 'Скрыть с календаря' : 'Показать на календаре';
 
     if (!groupIsVisible) {
-        // Если группа выключена, глаз блеклый и неактивный
-        eyeIcon = getIconEye();
-        eyeClass = 'inactive-group';
-        eyeDisabled = true;
-    } else {
-        // Если группа включена, показываем нормальное состояние
-        if (isVisible) {
-            eyeIcon = `<span style="color: var(--accent-green);">${getIconEye()}</span>`;
-        } else {
-            eyeIcon = getIconEyeOff();
-            eyeClass = 'hidden';
-        }
+        eyeClass = `${eyeClass} btn_icon_dim`.trim();
+        eyeTitle += ' (группа скрыта)';
     }
+
+    // Ручку показываем всем: переставлять карточки можно каждому у себя (личный порядок)
+    const dragHandle = `<div class="form__drag-handle-user" title="Перетащите, чтобы изменить порядок" style="cursor: grab; opacity: 0.5; margin-right: 8px;">${getIconDrag()}</div>`;
+
+    // «Глаз» доступен всем: это личный фильтр показа на календаре
+    const eyeButton = `<button type="button" class="btn_icon eye-btn ${eyeClass}" title="${eyeTitle}">
+                ${eyeIcon}
+            </button>`;
+
+    const deleteUserButton = canManage
+        ? `<button type="button" class="btn_icon delete-user-btn" title="Удалить">✕</button>`
+        : '';
 
     wrapper.innerHTML = `
         <div class="form__user-header">
-            <div class="form__drag-handle-user" title="Перетащите, чтобы изменить порядок" style="cursor: grab; opacity: 0.5; margin-right: 8px;">${getIconDrag()}</div>
-            <button type="button" class="btn_icon eye-btn ${eyeClass}" title="${eyeDisabled ? 'Группа скрыта' : (isVisible ? 'Скрыть' : 'Показать')}" ${eyeDisabled ? 'disabled' : ''}>
-                ${eyeIcon}
-            </button>
-            ${colorOrPlaceholder}
+            ${dragHandle}
+            ${eyeButton}
+            ${colorElement}
             <div class="form__username-wrapper">
-                <h2 class="form__username">${user.name}</h2>
+                <h2 class="form__username"${editable ? '' : ' style="cursor: default;"'}>${user.name}</h2>
                 <div class="form__username-tooltip">${user.name}</div>
             </div>
             <div class="form__user-actions">
                 <button type="button" class="btn_icon toggle-btn" title="${isHidden ? 'Развернуть' : 'Свернуть'}">${isHidden ? '▼' : '▲'}</button>
-                <button type="button" class="btn_icon delete-user-btn" title="Удалить">✕</button>
+                ${deleteUserButton}
             </div>
         </div>
         ${!isHidden ? `
             <div class="form__vacations-list" id="vacations-list-${user.id}"></div>
-            <button type="button" class="btn btn_small add-vac-btn">+ Добавить отпуск</button>
+            <div class="form__vacations-empty" id="vacations-empty-${user.id}">Отпусков пока нет</div>
+            ${editable ? '<button type="button" class="btn btn_small add-vac-btn">+ Добавить отпуск</button>' : ''}
             <div class="form__user-alerts" id="user-alerts-${user.id}"></div>
             <div class="form__user-totals" id="user-totals-${user.id}"></div>
         ` : ''}
@@ -140,11 +144,10 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     wrapper.addEventListener('mouseleave', clearUserVacationHighlight);
 
     const eyeBtn = wrapper.querySelector('.eye-btn');
-    if (eyeBtn && !eyeDisabled) {
+    if (eyeBtn) {
         eyeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            user.isVisible = !user.isVisible;
-            scheduleSave(user.id, user, requestRender);
+            toggleUserHidden(user.id);
             renderUserCard(user, requestRender, updateCalendarVacations);
             updateCalendarVacations();
         });
@@ -161,16 +164,18 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
         });
     }
 
-    wrapper.querySelector('.form__username').addEventListener('click', (e) => {
-        e.stopPropagation();
-        const newName = prompt('Введите новое имя:', user.name);
-        if (newName && newName !== user.name) {
-            user.name = newName;
-            scheduleSave(user.id, user, requestRender);
-            renderUserCard(user, requestRender, updateCalendarVacations);
-            updateCalendarVacations();
-        }
-    });
+    if (editable) {
+        wrapper.querySelector('.form__username').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const newName = prompt('Введите новое имя:', user.name);
+            if (newName && newName !== user.name) {
+                user.name = newName;
+                scheduleSave(user.id, user, requestRender);
+                renderUserCard(user, requestRender, updateCalendarVacations);
+                updateCalendarVacations();
+            }
+        });
+    }
 
     wrapper.querySelector('.toggle-btn').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -179,20 +184,23 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
         renderUserCard(user, requestRender, updateCalendarVacations);
     });
 
-    wrapper.querySelector('.delete-user-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm(`Удалить ${user.name}?`)) {
-            state.users = state.users.filter(u => u.id !== user.id);
-            window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
-            requestRender();
-            updateCalendarVacations();
-        }
-    });
+    if (canManage) {
+        wrapper.querySelector('.delete-user-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm(`Удалить ${user.name}?`)) {
+                state.users = state.users.filter(u => u.id !== user.id);
+                window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
+                requestRender();
+                updateCalendarVacations();
+            }
+        });
+    }
 
     if (!isHidden) {
         const vacList = wrapper.querySelector('.form__vacations-list');
         const alertsEl = wrapper.querySelector('.form__user-alerts');
         const totalsEl = wrapper.querySelector('.form__user-totals');
+        const emptyEl = wrapper.querySelector('.form__vacations-empty');
 
         // Итого по сотруднику + валидация требований ТК
         const refreshSummary = () => {
@@ -203,15 +211,14 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
             const totalCalDays = parts.reduce((sum, n) => sum + n, 0);
             const totalWorkDays = displayVacations.reduce((sum, v) => sum + getWorkingDays(v.startDate, v.endDate), 0);
 
-            if (parts.length === 0) {
-                totalsEl.style.display = 'none';
-            } else {
-                totalsEl.style.display = 'flex';
-                totalsEl.innerHTML = `
+            // Явно показываем, что отпусков нет, и держим итоги с нулями
+            emptyEl.style.display = displayVacations.length === 0 ? 'block' : 'none';
+
+            totalsEl.style.display = 'flex';
+            totalsEl.innerHTML = `
                     <span>Календарных: <b>${totalCalDays}</b> / ${ANNUAL_LEAVE_DAYS}</span>
                     <span>Рабочих: <b>${totalWorkDays}</b></span>
                 `;
-            }
 
             const alerts = [];
             if (totalCalDays > ANNUAL_LEAVE_DAYS) {
@@ -266,14 +273,14 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
 
             vacDiv.innerHTML = `
                 <div class="form__vacation-dates">
-                    <div class="form__drag-handle" title="Перетащите, чтобы изменить порядок">${getIconDrag()}</div>
-                    <input type="date" class="form__date" min="${state.year}-01-01" max="${state.year}-12-31" value="${vac.startDate || ''}" />
+                    ${editable ? `<div class="form__drag-handle" title="Перетащите, чтобы изменить порядок">${getIconDrag()}</div>` : ''}
+                    <input type="date" class="form__date" min="${state.year}-01-01" max="${state.year}-12-31" value="${vac.startDate || ''}"${editable ? '' : ' disabled'} />
                     <span class="form__date-sep">—</span>
-                    <input type="date" class="form__date" min="${state.year}-01-01" max="${state.year}-12-31" value="${vac.endDate || ''}" />
+                    <input type="date" class="form__date" min="${state.year}-01-01" max="${state.year}-12-31" value="${vac.endDate || ''}"${editable ? '' : ' disabled'} />
                 </div>
                 <div class="form__vacation-info">
                     <span class="form__vacation-days">${getCalendarDays(vac.startDate, vac.endDate)} кал. / ${getWorkingDays(vac.startDate, vac.endDate)} раб.</span>
-                    <button type="button" class="btn_icon delete" title="Удалить">✕</button>
+                    ${editable ? '<button type="button" class="btn_icon delete" title="Удалить">✕</button>' : ''}
                 </div>
             `;
 
@@ -297,18 +304,20 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
                 refreshSummary();
             });
 
-            vacDiv.querySelector('.btn_icon.delete').addEventListener('click', (e) => {
-                e.stopPropagation();
-                user.vacations = user.vacations.filter(v => v.id !== vac.id);
-                scheduleSave(user.id, user, requestRender);
-                renderUserCard(user, requestRender, updateCalendarVacations);
-                updateCalendarVacations();
-            });
+            if (editable) {
+                vacDiv.querySelector('.btn_icon.delete').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    user.vacations = user.vacations.filter(v => v.id !== vac.id);
+                    scheduleSave(user.id, user, requestRender);
+                    renderUserCard(user, requestRender, updateCalendarVacations);
+                    updateCalendarVacations();
+                });
+            }
 
             vacList.appendChild(vacDiv);
         });
 
-        if (typeof Sortable !== 'undefined') {
+        if (typeof Sortable !== 'undefined' && editable) {
             new Sortable(vacList, {
                 animation: 150,
                 handle: '.form__drag-handle',
@@ -324,13 +333,15 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
             });
         }
 
-        wrapper.querySelector('.add-vac-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (!user.vacations) user.vacations = [];
-            user.vacations.push({ id: `vacationid_${Date.now()}`, startDate: `${state.year}-01-01`, endDate: `${state.year}-01-01` });
-            scheduleSave(user.id, user, requestRender);
-            renderUserCard(user, requestRender, updateCalendarVacations);
-            updateCalendarVacations();
-        });
+        if (editable) {
+            wrapper.querySelector('.add-vac-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!user.vacations) user.vacations = [];
+                user.vacations.push({ id: `vacationid_${Date.now()}`, startDate: `${state.year}-01-01`, endDate: `${state.year}-01-01` });
+                scheduleSave(user.id, user, requestRender);
+                renderUserCard(user, requestRender, updateCalendarVacations);
+                updateCalendarVacations();
+            });
+        }
     }
 }

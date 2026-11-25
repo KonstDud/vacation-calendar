@@ -103,6 +103,17 @@
     border-radius: 50%;
 }
 
+/* Цвет сотрудника в режиме просмотра (менять нельзя — только видно) */
+.form__color-dot {
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin: 0 4px;
+    display: inline-block;
+}
+
 /* --- Имя и тултип --- */
 .form__username-wrapper {
     position: relative;
@@ -209,11 +220,34 @@
     opacity: 1;
 }
 
+/* Приглушённая, но кликабельная иконка (например, «глаз» при скрытой группе) */
+.btn_icon_dim {
+    opacity: 0.35;
+}
+
+.btn_icon_dim:hover {
+    opacity: 1;
+}
+
 /* --- Блок отпуска --- */
 .form__vacations-list {
     margin-top: 6px;
     padding-top: 6px;
     border-top: 1px solid var(--border-color);
+}
+
+/* Пустой список не должен рисовать разделитель */
+.form__vacations-list:empty {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+/* Когда отпусков нет — пишем об этом прямо */
+.form__vacations-empty {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 2px 0 6px;
 }
 
 .form__vacation {
@@ -380,13 +414,7 @@
     color: var(--text-primary);
 }
 
-/* Неактивный глаз (когда группа скрыта) */
-.btn_icon.inactive-group {
-    opacity: 0.3;
-    color: var(--text-muted) !important;
-    cursor: not-allowed;
-    pointer-events: none;
-}
+/* (класс .btn_icon.inactive-group больше не используется — см. .btn_icon_dim) */
 
 .btn_icon:disabled {
     cursor: not-allowed;

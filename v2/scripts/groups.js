@@ -1,6 +1,8 @@
-// scripts/groups.js
+// scripts/groups.js — настройки групп: личные переключатели всем, управление — админам
 import { state, stateEvents, addGroup, updateGroup, deleteGroup } from './state.js';
-import { getIconEye, getIconEyeOff, getIconEdit, getIconTrash } from './utils.js';
+import { getIconEdit, getIconTrash } from './utils.js';
+import { isAdmin } from './auth.js';
+import { isGroupHidden, setGroupHidden, isGroupCollapsed, setGroupCollapsed } from './view-prefs.js';
 
 export function initGroupsUI() {
     const popup = document.getElementById('groups-popup');
@@ -11,8 +13,6 @@ export function initGroupsUI() {
 
     let editingGroupId = null;
 
-    const iconEye = getIconEye();
-    const iconEyeOff = getIconEyeOff();
     const iconEdit = getIconEdit();
     const iconDelete = getIconTrash();
 
@@ -35,7 +35,6 @@ export function initGroupsUI() {
         const groupToEdit = isEditing ? state.groups.find(g => g.id === editingGroupId) : null;
         const currentColor = isEditing ? groupToEdit.color : '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
         const currentShowIfEmpty = isEditing ? (groupToEdit.showIfEmpty || false) : false;
-        const currentIsCollapsed = isEditing ? (groupToEdit.isCollapsed || false) : false;
 
         const form = document.createElement('div');
         form.style.cssText = 'display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; background: var(--bg-main); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);';
@@ -48,10 +47,6 @@ export function initGroupsUI() {
                 <input type="checkbox" id="group-show-empty-input" ${currentShowIfEmpty ? 'checked' : ''}>
                 Показывать в панели, если пустая
             </label>
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); cursor: pointer;">
-                <input type="checkbox" id="group-collapsed-input" ${currentIsCollapsed ? 'checked' : ''}>
-                Свернуть сотрудников по умолчанию
-            </label>
             <div style="display: flex; gap: 8px;">
                 <button type="button" id="btn-save-group" class="btn btn_add" style="flex: 1;">Сохранить</button>
                 <button type="button" id="btn-cancel-group" class="btn btn_small" style="flex: 1; margin-top: 0;">Отмена</button>
@@ -62,7 +57,6 @@ export function initGroupsUI() {
         const nameInput = form.querySelector('#group-name-input');
         const colorInput = form.querySelector('#group-color-input');
         const showEmptyInput = form.querySelector('#group-show-empty-input');
-        const collapsedInput = form.querySelector('#group-collapsed-input');
         nameInput.focus();
 
         nameInput.addEventListener('input', () => nameInput.style.borderColor = 'var(--border-color)');
@@ -72,7 +66,6 @@ export function initGroupsUI() {
             const name = nameInput.value.trim();
             const color = colorInput.value;
             const showIfEmpty = showEmptyInput.checked;
-            const isCollapsed = collapsedInput.checked;
 
             if (!name) {
                 nameInput.style.borderColor = 'var(--accent-red)';
@@ -85,7 +78,7 @@ export function initGroupsUI() {
 
             try {
                 if (isEditing) {
-                    await updateGroup(editingGroupId, { name, color, showIfEmpty, isCollapsed });
+                    await updateGroup(editingGroupId, { name, color, showIfEmpty });
                 } else {
                     await addGroup(name, color, showIfEmpty);
                 }
@@ -106,52 +99,80 @@ export function initGroupsUI() {
 
     function renderGroupsList() {
         content.innerHTML = '';
-        createBtn.style.display = 'block';
 
-        // ФИЛЬТРУЕМ "ungrouped", чтобы её нельзя было редактировать
+        const admin = isAdmin();
+        createBtn.style.display = admin ? 'block' : 'none';
+
+        const hint = document.createElement('div');
+        hint.className = 'groups-hint';
+        hint.textContent = admin
+            ? 'Личные настройки: показывать группу на календаре и сворачивать карточки. Управление группами — тоже здесь.'
+            : 'Ваши личные настройки: показывать ли группу на календаре и сворачивать ли карточки.';
+        content.appendChild(hint);
+
+        // «Без группы» не показываем — ей нельзя управлять
         const visibleGroups = state.groups.filter(g => g.id !== 'ungrouped');
 
         if (visibleGroups.length === 0) {
-            content.innerHTML = '<div style="color: var(--text-muted); font-size: 15px; text-align: center; padding: 32px 0;">Групп пока нет</div>';
+            const empty = document.createElement('div');
+            empty.className = 'groups-empty';
+            empty.textContent = 'Групп пока нет';
+            content.appendChild(empty);
             return;
         }
 
-        const massAssignBtn = document.createElement('button');
-        massAssignBtn.className = 'btn btn_small';
-        massAssignBtn.textContent = 'Массовое назначение сотрудников';
-        massAssignBtn.style.marginBottom = '12px';
-        massAssignBtn.style.background = 'var(--accent-blue)';
-        massAssignBtn.style.color = '#fff';
-        massAssignBtn.style.border = 'none';
-        massAssignBtn.addEventListener('click', renderMassAssignForm);
-        content.appendChild(massAssignBtn);
+        if (admin) {
+            const massAssignBtn = document.createElement('button');
+            massAssignBtn.className = 'btn btn_small';
+            massAssignBtn.textContent = 'Массовое назначение сотрудников';
+            massAssignBtn.style.marginBottom = '12px';
+            massAssignBtn.style.background = 'var(--accent-blue)';
+            massAssignBtn.style.color = '#fff';
+            massAssignBtn.style.border = 'none';
+            massAssignBtn.addEventListener('click', renderMassAssignForm);
+            content.appendChild(massAssignBtn);
+        }
 
         visibleGroups.forEach(group => {
             const item = document.createElement('div');
-            item.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 10px; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 8px;';
+            item.className = 'groups-item';
+
+            const groupHidden = isGroupHidden(group.id);
+            const collapsed = isGroupCollapsed(group.id);
 
             item.innerHTML = `
-                <div style="width: 16px; height: 16px; border-radius: 50%; background: ${group.color}; flex-shrink: 0;"></div>
-                <div style="flex: 1; font-weight: 500; font-size: 14px;">${group.name}</div>
-                <button class="btn_icon toggle-visibility" title="${group.isVisible ? 'Скрыть с календаря' : 'Показать на календаре'}" style="color: ${group.isVisible ? 'var(--accent-green)' : 'var(--text-muted)'}">
-                    ${group.isVisible ? iconEye : iconEyeOff}
-                </button>
-                <button class="btn_icon btn-edit-group" title="Редактировать">${iconEdit}</button>
-                <button class="btn_icon btn-delete-group" title="Удалить" style="color: var(--accent-red);">${iconDelete}</button>
+                <div class="groups-item__head">
+                    <div class="groups-item__dot" style="background: ${group.color};"></div>
+                    <div class="groups-item__name">${group.name}</div>
+                    ${admin ? `<button class="btn_icon btn-edit-group" title="Редактировать">${iconEdit}</button>` : ''}
+                    ${admin ? `<button class="btn_icon btn-delete-group" title="Удалить" style="color: var(--accent-red);">${iconDelete}</button>` : ''}
+                </div>
+                <label class="groups-item__toggle">
+                    <input type="checkbox" class="toggle-group-visible" ${groupHidden ? '' : 'checked'}>
+                    <span>Показывать на календаре</span>
+                </label>
+                <label class="groups-item__toggle">
+                    <input type="checkbox" class="toggle-group-collapsed" ${collapsed ? 'checked' : ''}>
+                    <span>Сворачивать сотрудников по умолчанию</span>
+                </label>
             `;
 
-            item.querySelector('.toggle-visibility').addEventListener('click', async (e) => {
-                const btn = e.currentTarget;
-                const newVisibility = !group.isVisible;
-                btn.style.color = newVisibility ? 'var(--accent-green)' : 'var(--text-muted)';
-                btn.innerHTML = newVisibility ? iconEye : iconEyeOff;
-                await updateGroup(group.id, { isVisible: newVisibility });
+            item.querySelector('.toggle-group-visible').addEventListener('change', (e) => {
+                setGroupHidden(group.id, !e.target.checked);
+                stateEvents.dispatchEvent(new Event('statechange'));
             });
 
-            item.querySelector('.btn-edit-group').addEventListener('click', () => { editingGroupId = group.id; renderForm(); });
-            item.querySelector('.btn-delete-group').addEventListener('click', async () => {
-                if (confirm(`Удалить группу "${group.name}"?`)) await deleteGroup(group.id);
+            item.querySelector('.toggle-group-collapsed').addEventListener('change', (e) => {
+                setGroupCollapsed(group.id, e.target.checked);
+                stateEvents.dispatchEvent(new Event('statechange'));
             });
+
+            if (admin) {
+                item.querySelector('.btn-edit-group').addEventListener('click', () => { editingGroupId = group.id; renderForm(); });
+                item.querySelector('.btn-delete-group').addEventListener('click', async () => {
+                    if (confirm(`Удалить группу "${group.name}"?`)) await deleteGroup(group.id);
+                });
+            }
 
             content.appendChild(item);
         });
@@ -191,6 +212,7 @@ export function initGroupsUI() {
                 <option value="">-- Без группы --</option>
                 ${realGroups.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}
             </select>
+            <div id="mass-note" class="groups-mass-note"></div>
             <div style="display: flex; gap: 8px; margin-top: 8px;">
                 <button type="button" id="btn-mass-save" class="btn btn_add" style="flex: 1;">Переназначить</button>
                 <button type="button" id="btn-mass-cancel" class="btn btn_small" style="flex: 1; margin-top: 0;">Отмена</button>
@@ -202,13 +224,51 @@ export function initGroupsUI() {
             renderGroupsList();
         });
 
+        // Подсказка: сколько выбранных уже сидят в целевой группе
+        const noteEl = form.querySelector('#mass-note');
+        const selectedUsers = () => [...form.querySelectorAll('.mass-user-checkbox:checked')]
+            .map(cb => state.users.find(u => u.id === cb.value))
+            .filter(Boolean);
+
+        const describeMass = () => {
+            const targetId = form.querySelector('#mass-group-select').value;
+            const checked = selectedUsers();
+            const already = checked.filter(u => (u.groupId || '') === targetId).length;
+
+            noteEl.className = 'groups-mass-note';
+
+            if (checked.length === 0) {
+                noteEl.textContent = '';
+                return;
+            }
+
+            if (already === checked.length) {
+                noteEl.className = 'groups-mass-note groups-mass-note_error';
+                noteEl.textContent = `Все выбранные уже в этой группе (${already}) — переназначать нечего`;
+                return;
+            }
+
+            noteEl.textContent = already > 0 ? `Уже в этой группе: ${already} — их не тронем` : '';
+        };
+
+        form.addEventListener('change', describeMass);
+        describeMass();
+
         form.querySelector('#btn-mass-save').addEventListener('click', async (e) => {
             const btn = e.target;
-            const selectedGroupId = form.querySelector('#mass-group-select').value;
-            const checkedBoxes = form.querySelectorAll('.mass-user-checkbox:checked');
+            const targetGroupId = form.querySelector('#mass-group-select').value;
+            const checked = selectedUsers();
 
-            if (checkedBoxes.length === 0) {
+            if (checked.length === 0) {
                 alert('Выберите хотя бы одного сотрудника');
+                return;
+            }
+
+            // Переназначаем только тех, кто ещё не в этой группе
+            const toMove = checked.filter(u => (u.groupId || '') !== targetGroupId);
+            if (toMove.length === 0) {
+                describeMass();
+                alert('Все выбранные сотрудники уже в этой группе');
                 return;
             }
 
@@ -216,18 +276,16 @@ export function initGroupsUI() {
             btn.disabled = true;
 
             try {
-                const promises = [];
-                checkedBoxes.forEach(cb => {
-                    const userId = cb.value;
-                    const user = state.users.find(u => u.id === userId);
-                    if (user) {
-                        user.groupId = selectedGroupId;
-                        const { id, ...dataToSave } = user;
-                        const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "users", userId);
-                        promises.push(window.firestore.setDoc(docRef, dataToSave, { merge: true }));
-                    }
-                });
-                await Promise.all(promises);
+                await Promise.all(toMove.map(user => {
+                    user.groupId = targetGroupId;
+                    const { id, ...dataToSave } = user;
+                    const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "users", user.id);
+                    return window.firestore.setDoc(docRef, dataToSave, { merge: true });
+                }));
+
+                const skipped = checked.length - toMove.length;
+                if (skipped > 0) alert(`Переназначено: ${toMove.length}. Уже были в группе: ${skipped}.`);
+
                 renderGroupsList();
             } catch (err) {
                 console.error(err);

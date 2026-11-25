@@ -7,12 +7,54 @@ import { initGroupsUI } from './groups.js';
 import { renderUserCard, scheduleSave } from './user-card.js';
 import { updateCalendarVacations as renderCalendarVacations } from './calendar-grid.js';
 import { getIconEye, getIconEyeOff } from './utils.js';
+import { clearSession, getCurrentUserName, getCurrentUserId, getRoleLabel, isAdmin, isAuthenticated } from './auth.js';
+import { isGroupHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, toggleGroupCollapsed, getPersonalOrder, setPersonalOrder } from './view-prefs.js';
 
 const usersContainer = document.getElementById('users-container');
 const updateCalendarVacations = () => renderCalendarVacations(scheduleSave, requestRender, renderUserCard);
 
-// ЛОКАЛЬНОЕ СОСТОЯНИЕ СВОРАЧИВАНИЯ (чтобы не сбивать настройки при перерисовке)
-const localCollapsedState = {};
+// Личный порядок важнее общего: если пользователь что-то перетащил,
+// порядок хранится у него в localStorage и на других не влияет.
+function sortByPersonal(items, personalIds, getId, getOrder) {
+    return [...items].sort((a, b) => {
+        const ai = personalIds.indexOf(getId(a));
+        const bi = personalIds.indexOf(getId(b));
+
+        if (ai === -1 && bi === -1) return (getOrder(a) || 0) - (getOrder(b) || 0);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+    });
+}
+
+// Порядок карточек в панели (сверху вниз, по всем группам)
+function collectUserOrder() {
+    const ids = [];
+    usersContainer.querySelectorAll('.group-block').forEach(block => {
+        block.querySelectorAll('.group-users > .form__user').forEach(card => {
+            ids.push(card.id.replace('user-card-', ''));
+        });
+    });
+    return ids;
+}
+
+// Короткая всплывающая подсказка
+let hintTimeout = null;
+function showHint(text) {
+    let node = document.getElementById('app-hint');
+    if (!node) {
+        node = document.createElement('div');
+        node.id = 'app-hint';
+        node.className = 'app-hint';
+        document.body.appendChild(node);
+    }
+
+    node.textContent = text;
+    node.classList.add('app-hint_visible');
+
+    clearTimeout(hintTimeout);
+    hintTimeout = setTimeout(() => node.classList.remove('app-hint_visible'), 2600);
+}
 
 async function ensureUngroupedGroup() {
     const ungroupedDocRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", "ungrouped");
@@ -42,11 +84,18 @@ function requestRender() {
         }
     });
 
-    const sortedGroups = [...state.groups].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const personalUsers = getPersonalOrder('users');
+    const sortedGroups = sortByPersonal(state.groups, getPersonalOrder('groups'), g => g.id, g => g.order);
+    const admin = isAdmin();
 
     sortedGroups.forEach(group => {
         const isUngrouped = group.id === 'ungrouped';
-        const usersInGroup = isUngrouped ? ungroupedUsers : (groupedUsers[group.id] || []);
+        const usersInGroup = sortByPersonal(
+            isUngrouped ? ungroupedUsers : (groupedUsers[group.id] || []),
+            personalUsers,
+            u => u.id,
+            u => u.order
+        );
 
         if (usersInGroup.length === 0 && !group.showIfEmpty && !isUngrouped) return;
 
@@ -57,22 +106,29 @@ function requestRender() {
         const groupHeader = document.createElement('div');
         groupHeader.className = 'group-header';
 
+        // Цвет группы меняет только админ, остальные видят его точкой
         const colorPicker = isUngrouped
             ? `<div class="group-color-picker-inline" style="background: #555; cursor: default;"></div>`
-            : `<input type="color" class="group-color-picker-inline" value="${group.color}" title="Изменить цвет группы">`;
+            : (admin
+                ? `<input type="color" class="group-color-picker-inline" value="${group.color}" title="Изменить цвет группы">`
+                : `<div class="group-color-picker-inline" style="background: ${group.color}; cursor: default;" title="Цвет группы (меняет администратор)"></div>`);
+
+        // Видимость группы — тоже личная настройка (у каждого своя)
+        const groupHidden = isGroupHidden(group.id);
+        groupBlock.dataset.groupHidden = groupHidden ? 'true' : 'false';
 
         groupHeader.innerHTML = `
             ${colorPicker}
             <div class="group-name">${group.name} (${usersInGroup.length})</div>
             <div class="group-actions">
                 <button class="btn_icon toggle-group-btn" title="Свернуть/Развернуть">▼</button>
-                <button class="btn_icon btn_icon-group toggle-group-visibility" title="${group.isVisible ? 'Скрыть группу' : 'Показать группу'}" style="color: ${group.isVisible ? 'var(--accent-green)' : 'var(--text-muted)'}">
-                    ${group.isVisible ? getIconEye() : getIconEyeOff()}
+                <button class="btn_icon btn_icon-group toggle-group-visibility" title="${groupHidden ? 'Показать группу' : 'Скрыть группу'}" style="color: ${groupHidden ? 'var(--text-muted)' : 'var(--accent-green)'}">
+                    ${groupHidden ? getIconEyeOff() : getIconEye()}
                 </button>
             </div>
         `;
 
-        if (!isUngrouped) {
+        if (!isUngrouped && admin) {
             groupHeader.querySelector('.group-color-picker-inline').addEventListener('change', async (e) => {
                 await updateGroup(group.id, { color: e.target.value });
             });
@@ -82,13 +138,8 @@ function requestRender() {
         groupUsersContainer.className = 'group-users';
         groupUsersContainer.dataset.groupId = isUngrouped ? '' : group.id;
 
-        // ПРИМЕНЯЕМ ЛОКАЛЬНОЕ СОСТОЯНИЕ (если оно есть), иначе берем из базы
-        let isCollapsed = group.isCollapsed === true;
-        if (localCollapsedState[group.id] !== undefined) {
-            isCollapsed = localCollapsedState[group.id];
-        } else {
-            localCollapsedState[group.id] = isCollapsed; // Запоминаем при первом рендере
-        }
+        // Свёрнутость группы — личная настройка (localStorage), у каждого своя
+        const isCollapsed = isGroupCollapsed(group.id);
 
         if (isCollapsed) {
             groupUsersContainer.classList.add('collapsed');
@@ -99,8 +150,7 @@ function requestRender() {
 
         toggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const isHiddenNow = groupUsersContainer.classList.contains('collapsed');
-            const newIsCollapsed = !isHiddenNow;
+            const newIsCollapsed = toggleGroupCollapsed(group.id);
 
             if (newIsCollapsed) {
                 groupUsersContainer.classList.add('collapsed');
@@ -109,24 +159,13 @@ function requestRender() {
                 groupUsersContainer.classList.remove('collapsed');
                 e.target.textContent = '▲';
             }
-
-            // Запоминаем в локальное состояние (в базу не пишем!)
-            localCollapsedState[group.id] = newIsCollapsed;
         });
 
-        groupHeader.querySelector('.toggle-group-visibility').addEventListener('click', async (e) => {
+        groupHeader.querySelector('.toggle-group-visibility').addEventListener('click', (e) => {
             e.stopPropagation();
-            const newVisibility = !group.isVisible;
-            const btn = e.currentTarget;
-
-            group.isVisible = newVisibility;
-
-            btn.style.color = newVisibility ? 'var(--accent-green)' : 'var(--text-muted)';
-            btn.innerHTML = newVisibility ? getIconEye() : getIconEyeOff();
-
-            updateCalendarVacations();
-
-            await updateGroup(group.id, { isVisible: newVisibility });
+            toggleGroupHidden(group.id);
+            // Перерисовываем панель: иначе у карточек остаётся старое состояние
+            requestRender();
         });
 
         usersInGroup.forEach(user => {
@@ -171,21 +210,28 @@ function initGroupSortable() {
                 const item = evt.item;
                 const usersContainer = item.querySelector('.group-users');
                 const groupId = item.dataset.groupId;
-                if (usersContainer && !localCollapsedState[groupId]) {
+                if (usersContainer && !isGroupCollapsed(groupId)) {
                     usersContainer.classList.remove('collapsed');
                 }
                 return;
             }
 
             const newOrderIds = Array.from(usersContainer.children).map(el => el.dataset.groupId).filter(id => id !== undefined);
-            newOrderIds.forEach((groupId, index) => {
-                const group = state.groups.find(g => g.id === groupId);
-                if (group && group.order !== index) {
-                    group.order = index;
-                    const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", groupId);
-                    window.firestore.setDoc(docRef, { order: index }, { merge: true }).catch(console.error);
-                }
-            });
+
+            if (isAdmin()) {
+                // Админ задаёт порядок групп для всех
+                newOrderIds.forEach((groupId, index) => {
+                    const group = state.groups.find(g => g.id === groupId);
+                    if (group && group.order !== index) {
+                        group.order = index;
+                        const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "groups", groupId);
+                        window.firestore.setDoc(docRef, { order: index }, { merge: true }).catch(console.error);
+                    }
+                });
+            } else {
+                // Остальные запоминают порядок только у себя
+                setPersonalOrder('groups', newOrderIds);
+            }
 
             requestRender();
         }
@@ -201,10 +247,13 @@ function initUserDragAndDrop() {
     });
     userSortableInstances = [];
 
+    const admin = isAdmin();
     const containers = document.querySelectorAll('.group-users');
     containers.forEach(container => {
         const sortable = new Sortable(container, {
-            group: 'shared-users',
+            // Перетаскивать между группами может только админ (это меняет данные),
+            // остальные переставляют карточки только у себя
+            group: admin ? 'shared-users' : { name: 'shared-users', pull: false, put: false },
             animation: 150,
             handle: '.form__drag-handle-user',
             ghostClass: 'form__user-sortable-ghost',
@@ -217,36 +266,51 @@ function initUserDragAndDrop() {
                 if (!groupBlock) return;
 
                 const groupId = groupBlock.dataset.groupId;
-                const group = state.groups.find(g => g.id === groupId);
 
-                // Если группа свернута (по базе или локально), разворачиваем
-                const isCollapsed = localCollapsedState[groupId] !== undefined ? localCollapsedState[groupId] : (group && group.isCollapsed);
+                // Порядок карточек личный — переставлять можно кого угодно.
+                // А вот перенести чужого сотрудника в ДРУГУЮ группу может только админ.
+                if (!admin) {
+                    const draggedId = evt.dragged && evt.dragged.id ? evt.dragged.id.replace('user-card-', '') : '';
+                    const fromGroupId = evt.from ? (evt.from.dataset.groupId || '') : '';
+                    const toGroupId = evt.to ? (evt.to.dataset.groupId || '') : '';
 
-                if (isCollapsed) {
+                    if (draggedId !== getCurrentUserId() && fromGroupId !== toGroupId) {
+                        showHint('Перенести сотрудника в другую группу может только администратор. Себя — можно.');
+                        return false;
+                    }
+                }
+
+                // Если целевая группа свёрнута — разворачиваем
+                if (isGroupCollapsed(groupId)) {
                     const usersContainer = groupBlock.querySelector('.group-users');
                     if (usersContainer) {
                         usersContainer.classList.remove('collapsed');
                         const toggleBtn = groupBlock.querySelector('.toggle-group-btn');
                         if (toggleBtn) toggleBtn.textContent = '▲';
-                        localCollapsedState[groupId] = false; // Обновляем локально
+                        setGroupCollapsed(groupId, false);
                     }
                 }
             },
 
             onEnd: async function (evt) {
-                const itemEl = evt.item;
-                const newContainer = evt.to;
-                const userId = itemEl.id.replace('user-card-', '');
-                const newGroupId = newContainer.dataset.groupId;
+                // личный порядок карточек сохраняем каждому в localStorage
+                setPersonalOrder('users', collectUserOrder());
 
+                const itemEl = evt.item;
+                const newGroupId = evt.to.dataset.groupId;
+                const userId = itemEl.id.replace('user-card-', '');
                 const user = state.users.find(u => u.id === userId);
-                if (user && user.groupId !== newGroupId) {
+
+                // смена группы: админ — кому угодно, сотрудник — только себе
+                const canMove = admin || userId === getCurrentUserId();
+                if (canMove && user && user.groupId !== newGroupId) {
                     user.groupId = newGroupId;
                     const { id, ...dataToSave } = user;
                     const docRef = window.firestore.doc(window.db, "vacationData_v2", String(state.year), "users", userId);
                     await window.firestore.setDoc(docRef, dataToSave, { merge: true });
-                    requestRender();
                 }
+
+                requestRender();
             }
         });
         userSortableInstances.push(sortable);
@@ -282,11 +346,8 @@ document.getElementById('btn-add-user').addEventListener('click', async () => {
         groupId: ''
     };
 
-    const ungrouped = state.groups.find(g => g.id === 'ungrouped');
-    const isUngroupedCollapsed = localCollapsedState['ungrouped'] !== undefined ? localCollapsedState['ungrouped'] : (ungrouped && ungrouped.isCollapsed);
-
-    if (isUngroupedCollapsed) {
-        localCollapsedState['ungrouped'] = false; // Разворачиваем локально
+    if (isGroupCollapsed('ungrouped')) {
+        setGroupCollapsed('ungrouped', false);
         const ungroupedBlock = document.querySelector(`.group-block[data-group-id="ungrouped"]`);
         if (ungroupedBlock) {
             const container = ungroupedBlock.querySelector('.group-users');
@@ -302,7 +363,7 @@ document.getElementById('btn-add-user').addEventListener('click', async () => {
 });
 
 document.getElementById('btn-logout').addEventListener('click', () => {
-    sessionStorage.removeItem('vacationAuth');
+    clearSession();
     window.location.href = 'login.html';
 });
 
@@ -326,8 +387,33 @@ if (yearSelect) {
     });
 }
 
+// --- Кто вошёл и что ему можно ---
+
+function applyAccessRules() {
+    const userLabel = document.getElementById('header-user');
+    if (userLabel) {
+        const name = getCurrentUserName();
+        const roleLabel = getRoleLabel();
+        userLabel.textContent = name ? `${name} · ${roleLabel}` : roleLabel;
+    }
+
+    if (isAdmin()) return;
+
+    // Сотрудник не добавляет сотрудников и не может сбросить данные.
+    // Шестерёнка настроек остаётся — там его личные настройки групп.
+    ['btn-add-user'].forEach(id => {
+        const node = document.getElementById(id);
+        if (node) node.style.display = 'none';
+    });
+
+    const sideFooter = document.querySelector('.side-footer');
+    if (sideFooter) sideFooter.style.display = 'none';
+}
+
+applyAccessRules();
+
 // Без авторизации приложение не инициализируем (index.html уже уводит на login.html)
-if (sessionStorage.getItem('vacationAuth')) {
+if (isAuthenticated()) {
     ensureUngroupedGroup().then(() => {
         initGroupsUI();
         initCalendarInteractions();

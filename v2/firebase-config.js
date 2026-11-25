@@ -6,6 +6,7 @@ import {
     doc,
     setDoc,
     getDoc,
+    getDocs,
     deleteDoc,
     onSnapshot,
     query,
@@ -34,6 +35,7 @@ window.firestore = {
     doc,
     setDoc,
     getDoc,
+    getDocs,
     deleteDoc,
     onSnapshot,
     query,
@@ -41,4 +43,4 @@ window.firestore = {
 
 window.firebaseReady = Promise.resolve(db);
 
-export { db, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, query };
+export { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query };

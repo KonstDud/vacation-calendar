@@ -1,166 +1,12 @@
 // scripts/calendar-interactions.js
 
 import { state, stateEvents } from './state.js';
+import { setupUserCombobox, escapeHtml } from './user-combobox.js';
+import { isAdmin, canEditUser, getCurrentUserId } from './auth.js';
 
 let selectionStart = null;
 
-const escapeHtml = (value) => String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-
-// Группирует сотрудников по группам для выпадающего списка.
-// query — фильтр по имени, selectedId — выбранный сотрудник (его не скрываем даже при фильтре).
-function buildUserGroups(query = '', selectedId = '') {
-    const UNGROUPED_ID = 'ungrouped';
-    const normalized = String(query || '').trim().toLowerCase();
-    const isMatch = (user) => !normalized
-        || String(user.name || '').toLowerCase().includes(normalized)
-        || user.id === selectedId;
-
-    const groups = [...state.groups].sort((a, b) => (a.order || 0) - (b.order || 0));
-    const knownIds = new Set(groups.map(g => g.id));
-
-    const byGroup = new Map();
-    state.users.forEach(user => {
-        if (!isMatch(user)) return;
-        const groupId = (user.groupId && knownIds.has(user.groupId)) ? user.groupId : UNGROUPED_ID;
-        if (!byGroup.has(groupId)) byGroup.set(groupId, []);
-        byGroup.get(groupId).push(user);
-    });
-
-    const result = [];
-    groups.forEach(group => {
-        const users = byGroup.get(group.id) || [];
-        if (users.length > 0) result.push({ label: group.name, users });
-    });
-
-    // Сотрудники без группы (в т.ч. если документа 'ungrouped' ещё нет в базе)
-    if (!knownIds.has(UNGROUPED_ID)) {
-        const rest = byGroup.get(UNGROUPED_ID) || [];
-        if (rest.length > 0) result.push({ label: 'Без группы', users: rest });
-    }
-
-    return result;
-}
-
-// HTML выпадающего списка: заголовки групп + кликабельные строки сотрудников
-function buildUsersListHtml(groups, activeIndex) {
-    let flatIndex = -1;
-
-    const html = groups.map(group => {
-        const options = group.users.map(user => {
-            flatIndex += 1;
-            const active = flatIndex === activeIndex ? ' userselect__option_active' : '';
-            const color = escapeHtml(user.color || '#888888');
-            return `<div class="userselect__option${active}" role="option" data-id="${escapeHtml(user.id)}">
-                <span class="userselect__dot" style="background:${color}"></span>${escapeHtml(user.name)}
-            </div>`;
-        }).join('');
-
-        return `<div class="userselect__group">${escapeHtml(group.label)}</div>${options}`;
-    }).join('');
-
-    return html || '<div class="userselect__empty">Ничего не найдено</div>';
-}
-
-// Комбобокс выбора сотрудника: поиск по имени, группировка, мышь и клавиатура
-function setupUserCombobox(root) {
-    const input = root.querySelector('#popup-user-input');
-    const list = root.querySelector('#popup-user-list');
-    const clearBtn = root.querySelector('#popup-user-clear');
-
-    let selectedId = '';
-    let groups = [];
-    let flatUsers = [];
-    let activeIndex = -1;
-
-    const isOpen = () => list.classList.contains('userselect__list_opened');
-
-    const renderList = () => {
-        list.innerHTML = buildUsersListHtml(groups, activeIndex);
-        const active = list.querySelector('.userselect__option_active');
-        if (active) active.scrollIntoView({ block: 'nearest' });
-    };
-
-    const openList = (resetActive) => {
-        groups = buildUserGroups(input.value, selectedId);
-        flatUsers = groups.flatMap(group => group.users);
-        if (resetActive) activeIndex = -1;
-        if (activeIndex > flatUsers.length - 1) activeIndex = flatUsers.length - 1;
-        renderList();
-        list.classList.add('userselect__list_opened');
-    };
-
-    const closeList = () => {
-        list.classList.remove('userselect__list_opened');
-        activeIndex = -1;
-    };
-
-    const selectUser = (user) => {
-        selectedId = user.id;
-        input.value = user.name;
-        clearBtn.classList.add('userselect__clear_visible');
-        closeList();
-        input.blur();
-    };
-
-    input.addEventListener('focus', () => openList(false));
-
-    input.addEventListener('input', () => {
-        selectedId = '';
-        clearBtn.classList.toggle('userselect__clear_visible', input.value.length > 0);
-        openList(true);
-    });
-
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            if (!isOpen()) openList(true);
-            activeIndex = Math.min(activeIndex + 1, flatUsers.length - 1);
-            renderList();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            activeIndex = Math.max(activeIndex - 1, 0);
-            renderList();
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            const user = flatUsers[activeIndex] || flatUsers[0];
-            if (user) selectUser(user);
-        } else if (e.key === 'Escape') {
-            closeList();
-        }
-    });
-
-    // mousedown, а не click: поле ввода не теряет фокус до обработки выбора
-    list.addEventListener('mousedown', (e) => {
-        const option = e.target.closest('.userselect__option[data-id]');
-        if (!option) return;
-        e.preventDefault();
-        const user = state.users.find(u => u.id === option.dataset.id);
-        if (user) selectUser(user);
-    });
-
-    clearBtn.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        selectedId = '';
-        input.value = '';
-        clearBtn.classList.remove('userselect__clear_visible');
-        input.focus();
-    });
-
-    const onDocumentMouseDown = (e) => {
-        if (!root.contains(e.target)) closeList();
-    };
-    document.addEventListener('mousedown', onDocumentMouseDown);
-
-    return {
-        getSelectedId: () => selectedId,
-        getTypedValue: () => input.value,
-        destroy: () => document.removeEventListener('mousedown', onDocumentMouseDown)
-    };
-}
+// Выбор сотрудника с поиском и группами — в общем модуле scripts/user-combobox.js
 
 export function initCalendarInteractions() {
     const calendarContainer = document.getElementById('calendar-container');
@@ -256,11 +102,12 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
             const vacEnd = new Date(vac.endDate);
             const startStrShort = `${String(vacStart.getDate()).padStart(2, '0')}.${String(vacStart.getMonth() + 1).padStart(2, '0')}`;
             const endStrShort = `${String(vacEnd.getDate()).padStart(2, '0')}.${String(vacEnd.getMonth() + 1).padStart(2, '0')}`;
+            const canDelete = canEditUser(user.id);
             return `
                         <div class="popup__existing-item" data-vac-id="${vac.id}" data-user-id="${user.id}">
                             <div class="popup__existing-dot" style="background: ${user.color};"></div>
                             <span class="popup__existing-name">${user.name} <span class="popup__existing-dates">(${startStrShort} – ${endStrShort})</span></span>
-                            <button type="button" class="popup__existing-delete" title="Удалить этот отпуск">✕</button>
+                            ${canDelete ? '<button type="button" class="popup__existing-delete" title="Удалить этот отпуск">✕</button>' : ''}
                         </div>
                     `;
         }).join('')}
@@ -268,25 +115,44 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
         `;
     }
 
+    // Кто и для кого может оформлять отпуска: админ — для всех, сотрудник — только себе
+    const admin = isAdmin();
+    const myId = getCurrentUserId();
+    const me = myId ? state.users.find(u => u.id === myId) : null;
+    const canAddOwn = !!me && canEditUser(me.id);
+    const canAddForOthers = admin;
+    const canAdd = canAddForOthers || canAddOwn;
+
+    const pickerHtml = canAddForOthers
+        ? `<label style="font-size: 13px; color: var(--text-muted);">Выберите сотрудника</label>
+            <div class="userselect">
+                <input type="text" class="userselect__input" id="popup-user-input" placeholder="Начните вводить имя..." autocomplete="off" />
+                <button type="button" class="userselect__clear" id="popup-user-clear" title="Очистить">✕</button>
+                <div class="userselect__list" id="popup-user-list"></div>
+            </div>`
+        : (canAddOwn
+            ? `<div class="popup__target">Отпуск для: <b>${escapeHtml(me.name)}</b></div>`
+            : `<div class="popup__target popup__target_muted">Добавление отпусков недоступно для вашей роли</div>`);
+
     popupContent.innerHTML = `
         ${existingHTML}
         
         <div class="popup__add-form">
             <div class="popup__add-title">${existingVacations.length > 0 ? 'Добавить еще один отпуск' : 'Оформить отпуск'}</div>
-            <label style="font-size: 13px; color: var(--text-muted);">Выберите сотрудника</label>
-            <div class="userselect">
-                <input type="text" class="userselect__input" id="popup-user-input" placeholder="Начните вводить имя..." autocomplete="off" />
-                <button type="button" class="userselect__clear" id="popup-user-clear" title="Очистить">✕</button>
-                <div class="userselect__list" id="popup-user-list"></div>
-            </div>
+            ${pickerHtml}
             <div id="popup-error" style="color: var(--accent-red); font-size: 12px; display: none;"></div>
 
-            <button id="popup-save-btn" class="btn btn_add" style="margin-top: 8px;">Добавить отпуск</button>
+            ${canAdd ? '<button id="popup-save-btn" class="btn btn_add" style="margin-top: 8px;">Добавить отпуск</button>' : ''}
         </div>
     `;
 
-    // Комбобокс выбора сотрудника (нужен closePopup для снятия слушателей)
-    const combo = setupUserCombobox(popupContent);
+    // Комбобокс выбора сотрудника (только для админа; нужен closePopup для снятия слушателей)
+    const combo = canAddForOthers
+        ? setupUserCombobox(popupContent, {
+            getUsers: () => state.users,
+            getGroups: () => state.groups
+        })
+        : null;
 
     popup.classList.add('popup_opened');
 
@@ -294,7 +160,7 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
         popup.classList.remove('popup_opened');
         clearSelection();
         popup.removeEventListener('mousedown', onMouseDown);
-        combo.destroy();
+        if (combo) combo.destroy();
     };
 
     const onMouseDown = (e) => {
@@ -309,6 +175,8 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
             const item = e.target.closest('.popup__existing-item');
             const vacId = item.dataset.vacId;
             const userId = item.dataset.userId;
+            if (!canEditUser(userId)) return;
+
             const user = state.users.find(u => u.id === userId);
             if (!user) return;
 
@@ -327,20 +195,31 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
     });
 
     const saveBtn = document.getElementById('popup-save-btn');
-    saveBtn.onclick = async () => {
+    if (saveBtn) saveBtn.onclick = async () => {
         const errorDiv = document.getElementById('popup-error');
         errorDiv.style.display = 'none';
 
-        // Сотрудник должен быть выбран из списка; если введено точное имя — принимаем его
-        let userId = combo.getSelectedId();
-        if (!userId) {
-            const typed = combo.getTypedValue().trim().toLowerCase();
-            const exact = typed ? state.users.filter(u => String(u.name).toLowerCase() === typed) : [];
-            if (exact.length === 1) userId = exact[0].id;
+        // Админ выбирает сотрудника, остальные оформляют отпуск только себе
+        let userId = '';
+        if (canAddForOthers) {
+            userId = combo ? combo.getSelectedId() : '';
+            if (!userId && combo) {
+                const typed = combo.getTypedValue().trim().toLowerCase();
+                const exact = typed ? state.users.filter(u => String(u.name).toLowerCase() === typed) : [];
+                if (exact.length === 1) userId = exact[0].id;
+            }
+        } else {
+            userId = myId;
         }
 
         if (!userId) {
             errorDiv.textContent = 'Выберите сотрудника из списка';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        if (!canEditUser(userId)) {
+            errorDiv.textContent = 'Можно оформлять отпуска только себе';
             errorDiv.style.display = 'block';
             return;
         }
