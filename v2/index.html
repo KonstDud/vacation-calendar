@@ -46,7 +46,13 @@
             </div>
 
             <div class="header__actions">
-                <span class="header__user" id="header-user"></span>
+                <button type="button" class="user-chip" id="btn-profile" title="Профиль сотрудника">
+                    <span class="user-chip__avatar" id="user-chip-avatar"></span>
+                    <span class="user-chip__text">
+                        <span class="user-chip__name" id="user-chip-name"></span>
+                        <span class="user-chip__sub" id="user-chip-sub"></span>
+                    </span>
+                </button>
                 <select id="year-select" class="year-select"></select>
                 <button type="button" class="btn btn_logout" id="btn-logout">Выйти</button>
             </div>
@@ -105,6 +111,23 @@
                 + Создать группу
             </button>
             <button type="button" class="popup__close-button" id="groups-popup-close" aria-label="Закрыть"
+                title="Закрыть"></button>
+        </div>
+    </div>
+
+    <!-- Попап профиля сотрудника -->
+    <div class="popup" id="profile-popup">
+        <div class="popup__container popup__container_profile">
+            <h2 class="popup__title" id="profile-popup-title">Профиль</h2>
+            <div class="popup__content" id="profile-popup-content"></div>
+            <div class="profile-footer">
+                <div class="profile-norm" id="profile-norm"></div>
+                <div class="popup__actions">
+                    <button type="button" class="btn btn_small" id="profile-popup-cancel">Закрыть</button>
+                    <button type="button" class="btn btn_add" id="profile-popup-save">Сохранить</button>
+                </div>
+            </div>
+            <button type="button" class="popup__close-button" id="profile-popup-close" aria-label="Закрыть"
                 title="Закрыть"></button>
         </div>
     </div>

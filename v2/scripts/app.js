@@ -7,8 +7,10 @@ import { initGroupsUI } from './groups.js';
 import { renderUserCard, scheduleSave } from './user-card.js';
 import { updateCalendarVacations as renderCalendarVacations } from './calendar-grid.js';
 import { getIconEye, getIconEyeOff } from './utils.js';
-import { clearSession, getCurrentUserName, getCurrentUserId, getRoleLabel, isAdmin, isAuthenticated } from './auth.js';
+import { clearSession, getCurrentUserId, isAdmin, isAuthenticated } from './auth.js';
 import { isGroupHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, toggleGroupCollapsed, getPersonalOrder, setPersonalOrder } from './view-prefs.js';
+import { initProfileModal } from './profile-modal.js';
+import { updateUserChip, initUserChip } from './user-chip.js';
 
 const usersContainer = document.getElementById('users-container');
 const updateCalendarVacations = () => renderCalendarVacations(scheduleSave, requestRender, renderUserCard);
@@ -326,6 +328,7 @@ stateEvents.addEventListener('statechange', () => {
     if (yearSelect) yearSelect.value = state.year;
     if (!document.querySelector('.calendar__month')) renderCalendar(state.year);
 
+    updateUserChip();
     requestRender();
 });
 
@@ -390,12 +393,7 @@ if (yearSelect) {
 // --- Кто вошёл и что ему можно ---
 
 function applyAccessRules() {
-    const userLabel = document.getElementById('header-user');
-    if (userLabel) {
-        const name = getCurrentUserName();
-        const roleLabel = getRoleLabel();
-        userLabel.textContent = name ? `${name} · ${roleLabel}` : roleLabel;
-    }
+    updateUserChip();
 
     if (isAdmin()) return;
 
@@ -415,6 +413,8 @@ applyAccessRules();
 // Без авторизации приложение не инициализируем (index.html уже уводит на login.html)
 if (isAuthenticated()) {
     ensureUngroupedGroup().then(() => {
+        initUserChip();
+        initProfileModal();
         initGroupsUI();
         initCalendarInteractions();
         initState();

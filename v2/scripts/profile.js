@@ -4,23 +4,23 @@
 export const PROFILE_SECTIONS = ['Организация', 'Данные', 'Нормы отпуска', 'Прочее'];
 
 export const PROFILE_FIELDS = [
-    { section: 'Организация', key: 'legalEntity', label: 'ЮЛ', placeholder: 'ООО «…»', suggest: 'text' },
-    { section: 'Организация', key: 'city', label: 'Город', placeholder: 'Москва', suggest: 'text' },
-    { section: 'Организация', key: 'department', label: 'Департамент', suggest: 'text' },
-    { section: 'Организация', key: 'division', label: 'Отдел', suggest: 'text' },
-    { section: 'Организация', key: 'direction', label: 'Направление / Группа', suggest: 'text' },
-    { section: 'Организация', key: 'position', label: 'Должность', suggest: 'text' },
+    { section: 'Организация', key: 'legalEntity', label: 'ЮЛ', placeholder: 'ООО «…»', dict: 'legalEntities' },
+    { section: 'Организация', key: 'city', label: 'Город / подразделение', placeholder: 'Например: Администрация_Москва', dict: 'cities' },
+    { section: 'Организация', key: 'department', label: 'Департамент', placeholder: 'Например: Департамент решений АСТУ', dict: 'departments' },
+    { section: 'Организация', key: 'division', label: 'Отдел', placeholder: 'Например: Отдел аналитики', dict: 'divisions' },
+    { section: 'Организация', key: 'direction', label: 'Направление / Группа', placeholder: 'Можно оставить пустым', dict: 'directions' },
+    { section: 'Организация', key: 'position', label: 'Должность', placeholder: 'Например: Инженер-тестировщик', dict: 'positions' },
 
-    { section: 'Данные', key: 'personnelNumber', label: 'Табельный номер', placeholder: '00ЗИ-00000' },
+    { section: 'Данные', key: 'personnelNumber', label: 'Табельный номер', placeholder: 'Например: 00ЗИ-02200' },
     { section: 'Данные', key: 'hireDate', label: 'Дата приёма', type: 'date' },
-    { section: 'Данные', key: 'email', label: 'Почта', type: 'email', placeholder: 'name@company.ru' },
+    { section: 'Данные', key: 'email', label: 'Почта', type: 'email', placeholder: 'Например: name@company.ru' },
 
-    { section: 'Нормы отпуска', key: 'annualDays', label: 'Основной ежегодный', type: 'number', min: 0, max: 365, defaultValue: 28 },
-    { section: 'Нормы отпуска', key: 'northernDays', label: 'Северный', type: 'number', min: 0, max: 365, defaultValue: 0 },
-    { section: 'Нормы отпуска', key: 'irregularDays', label: 'За ненормированный день', type: 'number', min: 0, max: 365, defaultValue: 0 },
+    { section: 'Нормы отпуска', key: 'annualDays', label: 'Основной ежегодный', short: 'Основной', type: 'number', min: 0, max: 365, defaultValue: 28 },
+    { section: 'Нормы отпуска', key: 'northernDays', label: 'Северный', short: 'Северный', type: 'number', min: 0, max: 365, defaultValue: 0 },
+    { section: 'Нормы отпуска', key: 'irregularDays', label: 'За ненормированный день', short: 'Ненормированный', type: 'number', min: 0, max: 365, defaultValue: 0 },
 
-    { section: 'Прочее', key: 'substitute', label: 'Замещающий', suggest: 'users' },
-    { section: 'Прочее', key: 'note', label: 'Примечание', type: 'textarea', placeholder: 'Например: в отпуске по уходу за ребенком' }
+    { section: 'Прочее', key: 'substitute', label: 'Замещающий', placeholder: 'Начните вводить имя' },
+    { section: 'Прочее', key: 'note', label: 'Примечание', type: 'textarea', wide: true, placeholder: 'Например: в отпуске по уходу за ребенком' }
 ];
 
 export const PROFILE_KEYS = PROFILE_FIELDS.map(field => field.key);
@@ -86,26 +86,6 @@ function pluralDays(count, genitive) {
     if (genitive) return last === 1 || (last >= 2 && last <= 4) ? 'дня' : 'дней';
     if (last === 1) return 'день';
     return last >= 2 && last <= 4 ? 'дня' : 'дней';
-}
-
-// Варианты для подсказок: берём уже введённые значения у сотрудников
-export function getSuggestions(users, field) {
-    if (!field || !field.suggest) return [];
-
-    if (field.suggest === 'users') {
-        return (users || [])
-            .map(user => user.name)
-            .filter(Boolean)
-            .sort((a, b) => a.localeCompare(b, 'ru'));
-    }
-
-    const values = new Set();
-    (users || []).forEach(user => {
-        const value = getProfile(user)[field.key];
-        if (value) values.add(value);
-    });
-
-    return [...values].sort((a, b) => a.localeCompare(b, 'ru'));
 }
 
 // dd.mm.yyyy — так даты лежат в шаблоне Excel

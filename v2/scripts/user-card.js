@@ -1,14 +1,12 @@
 // scripts/user-card.js
 import { state, discardPendingRemote } from './state.js';
-import { getCalendarDays, getWorkingDays, validateInternalOverlap, getExternalOverlaps, getIconEye, getIconEyeOff, getIconWarning, getIconDrag } from './utils.js';
+import { getCalendarDays, getWorkingDays, validateInternalOverlap, getExternalOverlaps, getIconEye, getIconEyeOff, getIconWarning, getIconDrag, getIconProfile } from './utils.js';
 import { highlightUserVacations, clearUserVacationHighlight } from './calendar-grid.js';
 import { canEditUser, canManageUsers } from './auth.js';
 import { isUserHidden, isGroupHidden, toggleUserHidden } from './view-prefs.js';
-import { escapeHtml } from './user-combobox.js';
-import {
-    PROFILE_FIELDS, getProfile, getEntitlement, isParentalLeave, formatOverDays, formatShortDays,
-    getFieldsBySection, getField, getSuggestions, toTemplateDate
-} from './profile.js';
+import { openProfileModal } from './profile-modal.js';
+import { updateUserChip } from './user-chip.js';
+import { getProfile, getEntitlement, isParentalLeave, formatOverDays, formatShortDays } from './profile.js';
 
 // Норма ТК по умолчанию — 28 календарных дней; одна из частей — не менее 14
 const MIN_LEAVE_PART = 14;
@@ -74,8 +72,6 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     const oldContainer = document.getElementById(`user-card-${user.id}`);
     if (!oldContainer) return;
 
-    ensureProfileSuggestions();
-
     // Видимость — личная настройка (localStorage), у каждого своя
     const isVisible = !isUserHidden(user.id);
     const isHidden = user.isHidden === true;
@@ -120,9 +116,12 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
         ? `<button type="button" class="btn_icon delete-user-btn" title="Удалить">✕</button>`
         : '';
 
+    const profileButton = `<button type="button" class="btn_icon profile-btn" title="Профиль сотрудника">${getIconProfile()}</button>`;
+
     wrapper.innerHTML = `
         <div class="form__user-header">
             ${dragHandle}
+            ${profileButton}
             ${eyeButton}
             ${colorElement}
             <div class="form__username-wrapper">
@@ -140,7 +139,6 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
             ${editable ? '<button type="button" class="btn btn_small add-vac-btn">+ Добавить отпуск</button>' : ''}
             <div class="form__user-alerts" id="user-alerts-${user.id}"></div>
             <div class="form__user-totals" id="user-totals-${user.id}"></div>
-            <div class="form__profile"></div>
         ` : ''}
     `;
 
@@ -149,6 +147,11 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     // Наведение на карточку подсвечивает на календаре все отпуска сотрудника
     wrapper.addEventListener('mouseenter', () => highlightUserVacations(user));
     wrapper.addEventListener('mouseleave', clearUserVacationHighlight);
+
+    wrapper.querySelector('.profile-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openProfileModal(user.id);
+    });
 
     const eyeBtn = wrapper.querySelector('.eye-btn');
     if (eyeBtn) {
@@ -168,6 +171,7 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
             scheduleSave(user.id, user, requestRender);
             renderUserCard(user, requestRender, updateCalendarVacations);
             updateCalendarVacations();
+            updateUserChip();
         });
     }
 
@@ -180,6 +184,7 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
                 scheduleSave(user.id, user, requestRender);
                 renderUserCard(user, requestRender, updateCalendarVacations);
                 updateCalendarVacations();
+                updateUserChip();
             }
         });
     }
@@ -252,9 +257,6 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
         };
 
         refreshSummary();
-
-        // Блок «Профиль» — данные, которые уходят в Excel
-        buildProfileBlock(wrapper, user, editable, refreshSummary);
 
         displayVacations.forEach(vac => {
             const vacDiv = document.createElement('div');
@@ -367,124 +369,3 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     }
 }
 
-// --- Профиль сотрудника ---
-
-const openProfiles = new Set();
-let suggestionsSignature = '';
-
-// Подсказки собираем из уже введённых значений, чтобы не плодить опечатки
-function ensureProfileSuggestions() {
-    const fields = PROFILE_FIELDS.filter(field => field.suggest);
-    const signature = fields.map(field => getSuggestions(state.users, field).join('\u0001')).join('\u0002');
-
-    if (signature === suggestionsSignature) return;
-    suggestionsSignature = signature;
-
-    fields.forEach(field => {
-        const id = `suggest-${field.key}`;
-        let list = document.getElementById(id);
-        if (!list) {
-            list = document.createElement('datalist');
-            list.id = id;
-            document.body.appendChild(list);
-        }
-        list.innerHTML = getSuggestions(state.users, field)
-            .map(value => `<option value="${escapeHtml(value)}"></option>`)
-            .join('');
-    });
-}
-
-function renderProfileField(field, value, editable) {
-    const label = escapeHtml(field.label);
-    const placeholder = escapeHtml(field.placeholder || '');
-
-    if (!editable) {
-        const text = field.type === 'date' ? toTemplateDate(value) : String(value === undefined || value === null ? '' : value);
-        return `<div class="profile-row">
-            <span class="profile-row__label">${label}</span>
-            <span class="profile-row__value">${text ? escapeHtml(text) : '—'}</span>
-        </div>`;
-    }
-
-    if (field.type === 'textarea') {
-        return `<label class="profile-field profile-field_wide">
-            <span class="profile-field__label">${label}</span>
-            <textarea class="profile-field__input" data-profile="${field.key}" rows="2" placeholder="${placeholder}">${escapeHtml(String(value || ''))}</textarea>
-        </label>`;
-    }
-
-    const type = field.type === 'number' ? 'number'
-        : field.type === 'date' ? 'date'
-            : field.type === 'email' ? 'email' : 'text';
-    const extra = field.type === 'number' ? ` min="${field.min || 0}" max="${field.max || 365}"` : '';
-    const listAttr = field.suggest ? ` list="suggest-${field.key}"` : '';
-    const raw = value === undefined || value === null ? '' : String(value);
-
-    return `<label class="profile-field">
-        <span class="profile-field__label">${label}</span>
-        <input class="profile-field__input" type="${type}" data-profile="${field.key}"${extra}${listAttr} value="${escapeHtml(raw)}" placeholder="${placeholder}">
-    </label>`;
-}
-
-function buildProfileBlock(wrapper, user, editable, onChange) {
-    const host = wrapper.querySelector('.form__profile');
-    if (!host) return;
-
-    const profile = getProfile(user);
-    const isOpen = openProfiles.has(user.id);
-
-    const filledCount = PROFILE_FIELDS.filter(field => {
-        const value = profile[field.key];
-        if (field.type === 'number') return Number(value) !== (field.defaultValue || 0);
-        return !!value;
-    }).length;
-
-    const body = getFieldsBySection().map(({ section, fields }) => `
-        <div class="profile-group">
-            <div class="profile-group__title">${section}</div>
-            <div class="profile-group__fields">
-                ${fields.map(field => renderProfileField(field, profile[field.key], editable)).join('')}
-            </div>
-        </div>
-    `).join('');
-
-    host.innerHTML = `
-        <button type="button" class="form__profile-toggle">
-            <span class="form__profile-caption">Профиль</span>
-            <span class="form__profile-count">${filledCount ? `заполнено: ${filledCount}` : 'не заполнен'}</span>
-            <span class="form__profile-arrow">${isOpen ? '▲' : '▼'}</span>
-        </button>
-        <div class="profile-body" ${isOpen ? '' : 'hidden'}>${body}</div>
-    `;
-
-    host.querySelector('.form__profile-toggle').addEventListener('click', (e) => {
-        e.stopPropagation();
-        const bodyEl = host.querySelector('.profile-body');
-        const willOpen = bodyEl.hidden;
-
-        bodyEl.hidden = !willOpen;
-        host.querySelector('.form__profile-arrow').textContent = willOpen ? '▲' : '▼';
-
-        if (willOpen) openProfiles.add(user.id);
-        else openProfiles.delete(user.id);
-    });
-
-    if (!editable) return;
-
-    host.querySelectorAll('[data-profile]').forEach(input => {
-        const key = input.dataset.profile;
-        const field = getField(key);
-        if (!field) return;
-
-        input.addEventListener('click', (e) => e.stopPropagation());
-        input.addEventListener('input', () => {
-            if (!user.profile) user.profile = {};
-            user.profile[key] = field.type === 'number'
-                ? Math.max(0, Math.round(Number(input.value) || 0))
-                : input.value;
-
-            scheduleSave(user.id, user);
-            if (onChange) onChange();
-        });
-    });
-}
