@@ -13,6 +13,11 @@
     max-width: 360px;
 }
 
+/* Шаг с профилем — окно шире, форма в несколько колонок */
+.login_wide {
+    max-width: min(880px, 96vw);
+}
+
 .login__brand {
     display: flex;
     align-items: center;
@@ -78,6 +83,28 @@
 .login__input:focus {
     border-color: var(--accent-green);
     box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+/* Селект в стиле проекта: своя стрелка с отступом от края */
+select.login__input {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    cursor: pointer;
+}
+
+/* Фамилия и Имя в одну строку */
+.login__row {
+    display: flex;
+    gap: 8px;
+}
+
+.login__row .login__input {
+    min-width: 0;
 }
 
 .login__submit {

@@ -1,11 +1,10 @@
 // scripts/profile-modal.js — профиль сотрудника в отдельном широком окне
 
 import { state, stateEvents } from './state.js';
-import { createCombo } from './combo.js';
-import { addDictionaryValue, getDictionary, loadDictionaries } from './dictionaries.js';
+import { loadDictionaries } from './dictionaries.js';
 import { PROFILE_FIELDS, PROFILE_SECTIONS, getProfile, getEntitlement, isParentalLeave, toTemplateDate } from './profile.js';
-import { canEditUser, getCurrentUserId } from './auth.js';
-import { attachOverflowTip } from './tooltip.js';
+import { createProfileForm } from './profile-form.js';
+import { canEditUser, getCurrentUserId, clearSession, isAdmin } from './auth.js';
 
 const el = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? '')
@@ -14,7 +13,7 @@ const escapeHtml = (value) => String(value ?? '')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-let controls = [];
+let profileForm = null;
 let currentUser = null;
 let editable = false;
 
@@ -25,6 +24,7 @@ export function initProfileModal() {
     el('profile-popup-close').addEventListener('click', closeProfileModal);
     el('profile-popup-cancel').addEventListener('click', closeProfileModal);
     el('profile-popup-save').addEventListener('click', saveProfile);
+    el('profile-popup-delete').addEventListener('click', deleteProfile);
     popup.addEventListener('mousedown', (e) => {
         if (e.target === popup) closeProfileModal();
     });
@@ -38,6 +38,15 @@ export async function openProfileModal(userId) {
     editable = !!user && canEditUser(user.id);
 
     el('profile-popup-save').style.display = editable ? 'inline-flex' : 'none';
+
+    // удалять может админ (любой профиль) или сам сотрудник (свой профиль)
+    const isOwnProfile = !!user && user.id === getCurrentUserId();
+    const canDelete = !!user && (isAdmin() || (editable && isOwnProfile));
+    const deleteButton = el('profile-popup-delete');
+
+    deleteButton.hidden = !canDelete;
+    deleteButton.textContent = isOwnProfile ? 'Удалить профиль' : 'Удалить сотрудника';
+
     el('profile-norm').textContent = '';
 
     if (!user) {
@@ -52,163 +61,37 @@ export async function openProfileModal(userId) {
     await loadDictionaries();
 
     el('profile-popup-title').textContent = editable ? 'Мой профиль' : user.name;
-    el('profile-popup-content').replaceChildren(buildForm(user, editable));
+    el('profile-popup-content').replaceChildren(
+        editable ? createFormElement(user) : buildReadOnly(getProfile(user))
+    );
     updateNormSummary();
     popup.classList.add('popup_opened');
 }
 
 export function closeProfileModal() {
     el('profile-popup').classList.remove('popup_opened');
-    controls.forEach(control => control.destroy && control.destroy());
-    controls = [];
+    if (profileForm) {
+        profileForm.destroy();
+        profileForm = null;
+    }
     currentUser = null;
 }
 
-function buildForm(user, isEditable) {
-    const profile = getProfile(user);
-
-    if (!isEditable) return buildReadOnly(profile);
-
-    const form = document.createElement('div');
-    form.className = 'profile-form';
-
-    PROFILE_SECTIONS.forEach(section => {
-        const fields = PROFILE_FIELDS.filter(field => field.section === section);
-        if (fields.length === 0) return;
-
-        const title = document.createElement('div');
-        title.className = 'profile-form__section';
-        title.textContent = section;
-        form.appendChild(title);
-
-        // Нормы отпуска — компактный ряд, не растягиваем на всю ширину
-        const numbers = fields.filter(field => field.type === 'number');
-        if (numbers.length > 0) {
-            const row = document.createElement('div');
-            row.className = 'pf-row';
-            numbers.forEach(field => row.appendChild(buildField(field, profile[field.key], user)));
-            form.appendChild(row);
-        }
-
-        fields
-            .filter(field => field.type !== 'number')
-            .forEach(field => form.appendChild(buildField(field, profile[field.key], user)));
+// Форма профиля — общий модуль, тот же, что и при регистрации
+function createFormElement(user) {
+    profileForm = createProfileForm(getProfile(user), {
+        users: state.users,
+        currentUserId: user.id,
+        onChange: updateNormSummary
     });
 
-    return form;
+    return profileForm.element;
 }
 
-function buildField(field, value, user) {
-    const wrapper = document.createElement('div');
-    wrapper.className = `pf-field${field.wide || field.type === 'textarea' ? ' pf-field_wide' : ''}`;
+// Форма профиля (buildForm/buildField) перенесена в scripts/profile-form.js
 
-    // Нормы отпуска — компактные поля с подписью внутри
-    if (field.type === 'number') {
-        const group = document.createElement('label');
-        group.className = 'pf-num';
-        group.innerHTML = `<span class="pf-num__label">${escapeHtml(field.short || field.label)}</span>
-            <input class="pf-num__input" type="number" min="${field.min || 0}" max="${field.max || 365}" value="${escapeHtml(String(value === undefined || value === null ? '' : value))}">`;
+// Значения списка (getComboOptions) — в scripts/profile-form.js
 
-        const input = group.querySelector('input');
-        const labelNode = group.querySelector('.pf-num__label');
-        input.addEventListener('input', updateNormSummary);
-
-        // если подпись не влезла — показываем её полностью в тёмной подсказке
-        attachOverflowTip(
-            wrapper,
-            () => `${field.label}: ${input.value}`,
-            () => labelNode.scrollWidth > labelNode.clientWidth + 1
-        );
-
-        wrapper.appendChild(group);
-        controls.push({ field, getValue: () => Math.max(0, Math.round(Number(input.value) || 0)) });
-        return wrapper;
-    }
-
-    // Имя поля: лежит внутри, поднимается наверх при фокусе или заполнении
-    const label = document.createElement('span');
-    label.className = 'pf-field__label';
-    label.textContent = field.label;
-
-    if (field.type === 'date') wrapper.classList.add('pf-field_date');
-
-    // Поля-справочники и «Замещающий» — тёмный выпадающий список с поиском
-    if (field.dict || field.key === 'substitute') {
-        const combo = createCombo({
-            options: getComboOptions(field, user),
-            value: String(value || ''),
-            placeholder: field.placeholder || ' ',
-            allowCustom: field.key !== 'substitute',
-            onAddCustom: field.dict ? (typed) => addDictionaryValue(field.dict, typed) : null,
-            onChange: updateNormSummary
-        });
-
-        wrapper.appendChild(combo.element);
-        wrapper.appendChild(label);
-
-        const comboInput = combo.element.querySelector('.combo__input');
-        attachOverflowTip(
-            wrapper,
-            () => combo.getValue(),
-            () => comboInput.scrollWidth > comboInput.clientWidth + 1
-        );
-
-        controls.push({ field, getValue: combo.getValue, destroy: combo.destroy });
-        return wrapper;
-    }
-
-    if (field.type === 'textarea') {
-        const textarea = document.createElement('textarea');
-        textarea.className = 'profile-form__input';
-        textarea.rows = 2;
-        textarea.placeholder = field.placeholder || ' ';
-        textarea.value = String(value || '');
-        textarea.addEventListener('input', updateNormSummary);
-        wrapper.appendChild(textarea);
-        wrapper.appendChild(label);
-        controls.push({ field, getValue: () => textarea.value });
-        return wrapper;
-    }
-
-    const input = document.createElement('input');
-    input.className = 'profile-form__input';
-    input.type = field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : 'text';
-    input.placeholder = field.placeholder || ' ';
-    input.value = value === undefined || value === null ? '' : String(value);
-    input.addEventListener('input', updateNormSummary);
-
-    wrapper.appendChild(input);
-    wrapper.appendChild(label);
-
-    // обрезанное значение читаем в тёмной подсказке
-    attachOverflowTip(
-        wrapper,
-        () => input.value,
-        () => field.type !== 'date' && input.scrollWidth > input.clientWidth + 1
-    );
-
-    controls.push({ field, getValue: () => input.value });
-
-    return wrapper;
-}
-
-// Значения списка: справочник + то, что уже введено у коллег
-function getComboOptions(field, user) {
-    if (field.key === 'substitute') {
-        return state.users
-            .filter(item => item.id !== user.id)
-            .map(item => item.name)
-            .sort((a, b) => a.localeCompare(b, 'ru'));
-    }
-
-    const values = new Set(getDictionary(field.dict));
-    state.users.forEach(item => {
-        const value = getProfile(item)[field.key];
-        if (value) values.add(value);
-    });
-
-    return [...values].sort((a, b) => a.localeCompare(b, 'ru'));
-}
 
 function buildReadOnly(profile) {
     const view = document.createElement('div');
@@ -239,13 +122,7 @@ function buildReadOnly(profile) {
 }
 
 function collectProfile() {
-    const profile = {};
-
-    controls.forEach(({ field, getValue }) => {
-        profile[field.key] = getValue();
-    });
-
-    return profile;
+    return profileForm ? profileForm.collect() : {};
 }
 
 function updateNormSummary() {
@@ -284,5 +161,47 @@ async function saveProfile() {
     } finally {
         button.disabled = false;
         button.textContent = 'Сохранить';
+    }
+}
+
+// Удаление профиля: админ — любой, сотрудник — только свой.
+// Удаляем и сотрудника (вместе с отпусками), и доступ (пароль).
+async function deleteProfile() {
+    if (!currentUser) return;
+
+    const isOwnProfile = currentUser.id === getCurrentUserId();
+    if (!isAdmin() && !(editable && isOwnProfile)) return;
+
+    const message = isOwnProfile
+        ? `Удалить профиль «${currentUser.name}»?\n\nВместе с ним удалятся все отпуска и доступ (пароль). Это действие нельзя отменить.`
+        : `Удалить сотрудника «${currentUser.name}»?\n\nВместе с ним удалятся все отпуска и доступ (пароль). Это действие нельзя отменить.`;
+
+    if (!confirm(message)) return;
+
+    const button = el('profile-popup-delete');
+    const userId = currentUser.id;
+
+    button.disabled = true;
+    button.textContent = 'Удаление…';
+
+    try {
+        await window.firestore.deleteDoc(window.firestore.doc(window.db, 'vacationData_v2', String(state.year), 'users', userId));
+        await window.firestore.deleteDoc(window.firestore.doc(window.db, 'access', userId));
+
+        if (isOwnProfile) {
+            closeProfileModal();
+            clearSession();
+            window.location.href = 'login.html';
+            return;
+        }
+
+        // админ удалил другого сотрудника — остаёмся в системе, обновляем список
+        state.users = state.users.filter(user => user.id !== userId);
+        closeProfileModal();
+        stateEvents.dispatchEvent(new Event('statechange'));
+    } catch (error) {
+        console.error('[profile] Ошибка удаления:', error);
+        button.disabled = false;
+        button.textContent = isOwnProfile ? 'Удалить профиль' : 'Удалить сотрудника';
     }
 }

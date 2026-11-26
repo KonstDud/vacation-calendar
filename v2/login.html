@@ -81,17 +81,36 @@
 
                 <!-- Новый сотрудник: создаёт себя и задаёт пароль -->
                 <div class="login__reg" id="reg-block" hidden>
-                    <p class="login__hint">Новый сотрудник. Укажите имя — и придумайте себе пароль.</p>
-                    <input type="text" class="login__input" id="reg-name" placeholder="Фамилия Имя Отчество" autocomplete="off" />
+                    <p class="login__hint">Новый сотрудник: укажите фамилию и имя, придумайте пароль и выберите группу.</p>
+                    <div class="login__row">
+                        <input type="text" class="login__input" id="reg-last" placeholder="Фамилия *" autocomplete="off" />
+                        <input type="text" class="login__input" id="reg-first" placeholder="Имя *" autocomplete="off" />
+                    </div>
+                    <input type="text" class="login__input" id="reg-middle" placeholder="Отчество (если есть)" autocomplete="off" />
                     <select class="login__input" id="reg-group"></select>
                     <input type="password" class="login__input" id="reg-password" placeholder="Придумайте пароль" autocomplete="off" />
                     <input type="password" class="login__input" id="reg-password2" placeholder="Повторите пароль" autocomplete="off" />
-                    <button type="button" class="btn btn_add login__submit" id="reg-submit">Создать и войти</button>
+                    <button type="button" class="btn btn_add login__submit" id="reg-submit">Создать и продолжить</button>
                     <div class="login__error" id="reg-error" hidden></div>
                     <button type="button" class="login__link" id="reg-cancel">← Назад</button>
                 </div>
 
                 <button type="button" class="login__link" id="to-admin">Войти как администратор</button>
+            </section>
+
+            <!-- Шаг: профиль нового сотрудника -->
+            <section class="login__step" id="step-profile" hidden>
+                <h2 class="login__step-title">Заполните профиль</h2>
+                <p class="login__hint">Эти данные уходят в Excel-график. Можно заполнить позже — в своём профиле.</p>
+                <div id="reg-profile-form"></div>
+                <div class="login__error" id="reg-profile-error" hidden></div>
+                <div class="profile-footer">
+                    <div class="profile-norm" id="reg-profile-norm"></div>
+                    <div class="popup__actions">
+                        <button type="button" class="btn btn_small" id="reg-profile-skip">Заполнить позже</button>
+                        <button type="button" class="btn btn_add" id="reg-profile-save">Сохранить и войти</button>
+                    </div>
+                </div>
             </section>
 
             <!-- Шаг 3: администратор -->

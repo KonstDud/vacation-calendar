@@ -654,9 +654,29 @@ input[type="number"] {
 
 .popup__actions .btn {
     min-width: 118px;
-    height: 38px;
+    min-height: 38px;
+    width: auto;
     margin-top: 0;
     font-size: 13px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Красная (опасная) кнопка — удаление профиля */
+.btn_danger {
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: var(--accent-red);
+}
+
+.btn_danger:hover {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: var(--accent-red);
+}
+
+/* Скрытая кнопка должна быть скрыта (перебиваем .btn { display: inline-flex }) */
+.popup__actions .btn[hidden] {
+    display: none;
 }
 
 /* Сетка формы: 3 колонки, вместо подписей — подсказки внутри полей */

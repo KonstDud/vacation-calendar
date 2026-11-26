@@ -199,9 +199,10 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     if (canManage) {
         wrapper.querySelector('.delete-user-btn').addEventListener('click', (e) => {
             e.stopPropagation();
-            if (confirm(`Удалить ${user.name}?`)) {
+            if (confirm(`Удалить сотрудника «${user.name}»?\n\nВместе с ним удалятся все отпуска и доступ (пароль).`)) {
                 state.users = state.users.filter(u => u.id !== user.id);
                 window.firestore.deleteDoc(getUserDoc(state.year, user.id)).catch(console.error);
+                window.firestore.deleteDoc(window.firestore.doc(window.db, 'access', user.id)).catch(console.error);
                 requestRender();
                 updateCalendarVacations();
             }

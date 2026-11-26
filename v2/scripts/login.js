@@ -11,14 +11,28 @@ import {
     isAuthenticated
 } from './auth.js';
 import { setupUserCombobox, escapeHtml } from './user-combobox.js';
+import { createProfileForm } from './profile-form.js';
+import { loadDictionaries } from './dictionaries.js';
+import { getProfile, getEntitlement, isParentalLeave } from './profile.js';
+import { collectPeopleFromNearbyYears } from './state.js';
 
 const el = (id) => document.getElementById(id);
+
+// Сравниваем ФИО без учёта порядка слов: «Петров Иван» и «Иван Петров» — один человек
+const normalizeName = (value) => String(value || '')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(' ');
 
 const LAST_USER_KEY = 'vacationLastUser';
 
 const stepTeam = el('step-team');
 const stepUser = el('step-user');
 const stepAdmin = el('step-admin');
+const stepProfile = el('step-profile');
 
 let people = [];
 let groups = [];
@@ -27,6 +41,8 @@ let currentYear = null;
 let selectedUser = null;
 let selectedAccess = null;
 let isFirstLogin = false;
+let regProfileForm = null;
+let pendingUser = null;
 
 function getLastUser() {
     try {
@@ -63,7 +79,8 @@ function showLastUser() {
 }
 
 function showStep(step) {
-    [stepTeam, stepUser, stepAdmin].forEach(node => { node.hidden = node !== step; });
+    [stepTeam, stepUser, stepAdmin, stepProfile].forEach(node => { node.hidden = node !== step; });
+    document.querySelector('.login').classList.toggle('login_wide', step === stepProfile);
 }
 
 function showError(node, message) {
@@ -82,21 +99,18 @@ function resolveYear() {
     return new Date().getFullYear();
 }
 
-async function loadPeople(year) {
+async function loadGroups(year) {
     const { collection, getDocs } = window.firestore;
-
-    const usersSnap = await getDocs(collection(window.db, 'vacationData_v2', String(year), 'users'));
-    people = [];
-    usersSnap.forEach(doc => people.push({ id: doc.id, ...doc.data() }));
-    people.sort((a, b) => (a.order || 0) - (b.order || 0));
 
     const groupsSnap = await getDocs(collection(window.db, 'vacationData_v2', String(year), 'groups'));
     groups = [];
     groupsSnap.forEach(doc => groups.push({ id: doc.id, ...doc.data() }));
 }
 
-function finishLogin(userId, name, role) {
+function finishLogin(userId, name, role, year) {
     rememberLastUser(userId, name);
+    // запоминаем год записи, чтобы приложение открыло тот же год
+    if (year) localStorage.setItem('vacationYear', String(year));
     saveSession({ userId, name, role });
     window.location.href = 'index.html';
 }
@@ -161,9 +175,13 @@ el('team-submit').addEventListener('click', async () => {
             return;
         }
 
-        const year = resolveYear();
-        currentYear = year;
-        await loadPeople(year);
+        // люди из соседних лет: главный год — где основная команда,
+        // остальные записи тоже показываем, чтобы видели себя все
+        const collected = await collectPeopleFromNearbyYears(resolveYear());
+        people = collected.people;
+        currentYear = collected.mainYear;
+        localStorage.setItem('vacationYear', String(currentYear));
+        await loadGroups(currentYear);
 
         combo = setupUserCombobox(el('login-card'), {
             getUsers: () => people,
@@ -232,7 +250,7 @@ el('user-submit').addEventListener('click', async () => {
             return;
         }
 
-        finishLogin(selectedUser.id, selectedUser.name, role);
+        finishLogin(selectedUser.id, selectedUser.name, role, selectedUser.year || currentYear);
     } catch (error) {
         console.error('[login] Ошибка входа сотрудника:', error);
         showError(errorNode, 'Не удалось войти, попробуйте ещё раз');
@@ -278,7 +296,7 @@ el('admin-submit').addEventListener('click', async () => {
             showError(errorNode, 'Неверный пароль');
             return;
         }
-        finishLogin('', 'Администратор', ROLES.ADMIN);
+        finishLogin('', 'Администратор', ROLES.ADMIN, currentYear);
     } catch (error) {
         console.error('[login] Ошибка входа администратора:', error);
         showError(errorNode, 'Не удалось войти, попробуйте ещё раз');
@@ -314,9 +332,7 @@ el('login-other').addEventListener('click', () => {
 
 el('reg-start').addEventListener('click', () => {
     showError(el('reg-error'), '');
-    el('reg-name').value = '';
-    el('reg-password').value = '';
-    el('reg-password2').value = '';
+    ['reg-last', 'reg-first', 'reg-middle', 'reg-password', 'reg-password2'].forEach(id => { el(id).value = ''; });
 
     // можно сразу выбрать свою группу (кроме «Без группы» — это пустое значение)
     const groupSelect = el('reg-group');
@@ -339,13 +355,28 @@ el('reg-cancel').addEventListener('click', () => {
 el('reg-submit').addEventListener('click', async () => {
     const button = el('reg-submit');
     const errorNode = el('reg-error');
-    const name = el('reg-name').value.trim();
+    const lastName = el('reg-last').value.trim();
+    const firstName = el('reg-first').value.trim();
+    const middleName = el('reg-middle').value.trim();
+    const name = [lastName, firstName, middleName].filter(Boolean).join(' ');
     const password = el('reg-password').value;
 
     showError(errorNode, '');
 
-    if (name.length < 2) {
-        showError(errorNode, 'Укажите фамилию и имя');
+    // имя и фамилия обязательны, только буквы и дефис — чтобы не заводили «всякую фигню»
+    const namePattern = /^[А-Яа-яЁёA-Za-z][А-Яа-яЁёA-Za-z-]*$/;
+
+    if (!lastName || !firstName) {
+        showError(errorNode, 'Укажите фамилию и имя — оба поля обязательны');
+        (lastName ? el('reg-first') : el('reg-last')).focus();
+        return;
+    }
+    if (!namePattern.test(lastName) || !namePattern.test(firstName)) {
+        showError(errorNode, 'Фамилия и имя — только буквы (можно дефис), без цифр и лишних пробелов');
+        return;
+    }
+    if (middleName && !namePattern.test(middleName)) {
+        showError(errorNode, 'Отчество — только буквы (можно дефис)');
         return;
     }
     if (password.length < 4) {
@@ -357,9 +388,9 @@ el('reg-submit').addEventListener('click', async () => {
         return;
     }
 
-    const normalized = name.toLowerCase();
-    if (people.some(user => String(user.name).trim().toLowerCase() === normalized)) {
-        showError(errorNode, 'Такое имя уже есть в списке — выберите себя в списке');
+    const duplicate = people.find(user => normalizeName(user.name) === normalizeName(name));
+    if (duplicate) {
+        showError(errorNode, `Сотрудник «${name}» уже есть в графике. Вернитесь назад и выберите себя в списке — или добавьте отчество, если это разные люди.`);
         return;
     }
 
@@ -379,7 +410,7 @@ el('reg-submit').addEventListener('click', async () => {
         });
 
         await saveUserAccess(newRef.id, name, password, ROLES.USER);
-        finishLogin(newRef.id, name, ROLES.USER);
+        await showProfileStep(newRef.id, name);
     } catch (error) {
         console.error('[login] Ошибка регистрации:', error);
         showError(errorNode, 'Не удалось создать профиль, попробуйте ещё раз');
@@ -388,10 +419,69 @@ el('reg-submit').addEventListener('click', async () => {
     }
 });
 
-['reg-name', 'reg-password', 'reg-password2'].forEach(id => {
+['reg-last', 'reg-first', 'reg-middle', 'reg-password', 'reg-password2'].forEach(id => {
     el(id).addEventListener('keydown', (e) => {
         if (e.key === 'Enter') el('reg-submit').click();
     });
+});
+
+// --- шаг профиля после регистрации ---
+
+async function showProfileStep(userId, userName) {
+    pendingUser = { id: userId, name: userName };
+
+    await loadDictionaries();
+
+    regProfileForm = createProfileForm(getProfile({}), {
+        users: people,
+        currentUserId: userId,
+        onChange: updateRegNorm
+    });
+
+    el('reg-profile-form').replaceChildren(regProfileForm.element);
+    showError(el('reg-profile-error'), '');
+    updateRegNorm();
+    showStep(stepProfile);
+}
+
+function updateRegNorm() {
+    const node = el('reg-profile-norm');
+    if (!node || !regProfileForm) return;
+
+    const profile = regProfileForm.collect();
+
+    node.innerHTML = isParentalLeave(profile)
+        ? '<span class="profile-norm__warn">Отпуск по уходу за ребенком — норму не считаем</span>'
+        : `Норма в году: ${profile.annualDays} + ${profile.northernDays} + ${profile.irregularDays} = <b>${getEntitlement(profile)}</b> календарных дней`;
+}
+
+el('reg-profile-save').addEventListener('click', async () => {
+    if (!pendingUser || !regProfileForm) return;
+
+    const button = el('reg-profile-save');
+    const errorNode = el('reg-profile-error');
+    showError(errorNode, '');
+
+    button.disabled = true;
+    button.textContent = 'Сохранение…';
+
+    try {
+        const profile = regProfileForm.collect();
+        const ref = window.firestore.doc(window.db, 'vacationData_v2', String(currentYear), 'users', pendingUser.id);
+        await window.firestore.setDoc(ref, { profile }, { merge: true });
+
+        finishLogin(pendingUser.id, pendingUser.name, ROLES.USER, currentYear);
+    } catch (error) {
+        console.error('[login] Ошибка сохранения профиля:', error);
+        showError(errorNode, 'Не удалось сохранить профиль — можно заполнить позже');
+        button.disabled = false;
+        button.textContent = 'Сохранить и войти';
+    }
+});
+
+el('reg-profile-skip').addEventListener('click', () => {
+    if (!pendingUser) return;
+    finishLogin(pendingUser.id, pendingUser.name, ROLES.USER, currentYear);
 });
 
 // --- старт ---

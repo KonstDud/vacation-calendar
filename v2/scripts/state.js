@@ -5,12 +5,21 @@ const MAX_YEAR = 2100;
 
 function isValidYear(y) { return Number.isInteger(y) && y >= MIN_YEAR && y <= MAX_YEAR; }
 
-function resolveInitialYear() {
+// Год задан явно (в ссылке или сохранён в браузере) — его и уважаем
+function explicitYear() {
     const params = new URLSearchParams(window.location.search);
     const urlYear = Number(params.get("year"));
     if (isValidYear(urlYear)) return urlYear;
+
     const lsYear = Number(localStorage.getItem("vacationYear"));
     if (isValidYear(lsYear)) return lsYear;
+
+    return null;
+}
+
+function resolveInitialYear() {
+    const explicit = explicitYear();
+    if (explicit) return explicit;
     return new Date().getFullYear();
 }
 
@@ -34,6 +43,65 @@ function emitChange() {
 
 function usersCollection(year) {
     return window.firestore.collection(window.db, "vacationData_v2", String(year), "users");
+}
+
+// Собираем сотрудников из соседних лет: главный год — тот, где их больше всего.
+// Так в «Кто вы?» видно всех, даже если часть записей осталась в другом году,
+// а приложение по умолчанию открывает год с основной командой.
+export async function collectPeopleFromNearbyYears(preferred) {
+    const candidates = [preferred, preferred + 1, preferred - 1, preferred + 2, preferred - 2];
+    const byYear = [];
+
+    for (const year of candidates) {
+        try {
+            const snapshot = await window.firestore.getDocs(usersCollection(year));
+            const users = [];
+            snapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
+            if (users.length > 0) byYear.push({ year, users });
+        } catch (error) {
+            console.error(`[state] Не удалось прочитать ${year} год:`, error);
+        }
+    }
+
+    const main = byYear.reduce((best, item) => (!best || item.users.length > best.users.length ? item : best), null);
+    const mainYear = main ? main.year : preferred;
+
+    // сначала люди основного года, затем те, кто есть только в других годах
+    const people = [];
+    const seen = new Set();
+    const addUser = (user, year) => {
+        const key = normalizePersonName(user.name) || user.id;
+        if (seen.has(key)) return;
+        seen.add(key);
+        people.push({ ...user, year });
+    };
+
+    byYear.forEach(item => {
+        if (item.year === mainYear) item.users.forEach(user => addUser(user, item.year));
+    });
+    byYear.forEach(item => {
+        if (item.year !== mainYear) item.users.forEach(user => addUser(user, item.year));
+    });
+
+    people.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru'));
+
+    return { people, mainYear };
+}
+
+export async function detectMainYear(preferred) {
+    const { mainYear } = await collectPeopleFromNearbyYears(preferred);
+    return mainYear;
+}
+
+// Сравниваем ФИО без учёта порядка слов и регистра
+export function normalizePersonName(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean)
+        .sort()
+        .join(' ');
 }
 
 function groupsCollection(year) {
@@ -133,6 +201,11 @@ async function startSubscription(year) {
 }
 
 export async function initState() {
+    // если год не задан ссылкой или localStorage — берём год с основной командой
+    if (!explicitYear()) {
+        state.year = await detectMainYear(state.year);
+    }
+
     const year = state.year;
     localStorage.setItem("vacationYear", String(year));
     const url = new URL(window.location.href);
