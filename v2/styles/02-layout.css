@@ -163,18 +163,28 @@
     gap: 16px;
     box-shadow: var(--shadow);
     max-height: calc(100vh - 120px);
-    overflow-y: auto;
+    /* Скроллится только список — шапка и кнопки панели всегда на виду */
+    overflow: hidden;
 }
 
-.content-side::-webkit-scrollbar {
+/* Список сотрудников: своя прокрутка, футер панели не уезжает */
+#users-container {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-right: -4px;
+    padding-right: 4px;
+}
+
+#users-container::-webkit-scrollbar {
     width: 6px;
 }
 
-.content-side::-webkit-scrollbar-track {
+#users-container::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.content-side::-webkit-scrollbar-thumb {
+#users-container::-webkit-scrollbar-thumb {
     background: var(--border-color);
     border-radius: 4px;
 }
@@ -202,6 +212,54 @@
     margin-top: auto;
     padding-top: 12px;
     border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+/* --- Поиск по сотрудникам --- */
+.side-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.side-search__input {
+    width: 100%;
+    padding: 7px 30px 7px 10px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+}
+
+.side-search__input:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.side-search__input::placeholder {
+    color: var(--text-muted);
+}
+
+.side-search__clear {
+    position: absolute;
+    right: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.side-search__clear:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
 }
 
 /* --- Баннер фильтра «отпуска за месяц» --- */

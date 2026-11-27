@@ -11,6 +11,7 @@ import { clearSession, getCurrentUserId, isAdmin, isAuthenticated } from './auth
 import { isGroupHidden, isUserHidden, setUserHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, toggleGroupCollapsed, getPersonalOrder, setPersonalOrder } from './view-prefs.js';
 import { initProfileModal, openProfileModal } from './profile-modal.js';
 import { updateUserChip, initUserChip } from './user-chip.js';
+import { getProfile } from './profile.js';
 import { showNotice } from './notice.js';
 import { MONTH_NAMES, getViewMonth, setViewMonth, filterUsersByViewMonth, getCalendarMonthRange, isViewMonthActive } from './view-month.js';
 import { initExportDialog, openExportDialog } from './export-dialog.js';
@@ -62,12 +63,51 @@ async function ensureUngroupedGroup() {
     }
 }
 
+// --- Поиск по сотрудникам (личный, ничего не сохраняем в базу) ---
+let searchQuery = '';
+
+const userSearchInput = document.getElementById('user-search');
+const userSearchClear = document.getElementById('user-search-clear');
+
+// Показываем, сколько нашлось, прямо в подсказке поля
+function updateSearchInfo(shown) {
+    if (!userSearchInput) return;
+
+    if (userSearchClear) userSearchClear.hidden = !searchQuery;
+
+    const total = (state.users || []).length;
+    userSearchInput.placeholder = searchQuery
+        ? `Найдено: ${shown} из ${total}`
+        : 'Поиск сотрудника…';
+    userSearchInput.title = searchQuery ? 'Enter — оставить, Esc — очистить' : '';
+}
+
+function resetSearch() {
+    if (!userSearchInput) return;
+
+    userSearchInput.value = '';
+    searchQuery = '';
+}
+
 function requestRender() {
     usersContainer.replaceChildren();
 
-    // При активном фильтре по месяцу показываем только тех, у кого отпуск в этом месяце
+// При активном фильтре по месяцу показываем только тех, у кого отпуск в этом месяце
     const filterActive = isViewMonthActive();
-    const visibleUsers = filterUsersByViewMonth(state.users);
+
+    // Поиск по сотрудникам: ФИО и должность всем, табельный — только админу
+    const matchesSearch = (user) => {
+        if (!searchQuery) return true;
+
+        const profile = getProfile(user);
+        const haystack = [user.name, profile.position, isAdmin() ? profile.personnelNumber : '']
+            .join(' ').toLowerCase();
+
+        return searchQuery.split(/\s+/).every(word => haystack.includes(word));
+    };
+
+    const visibleUsers = filterUsersByViewMonth(state.users).filter(matchesSearch);
+    updateSearchInfo(visibleUsers.length);
 
     const groupedUsers = {}; const ungroupedUsers = [];
     visibleUsers.forEach(user => {
@@ -92,9 +132,9 @@ function requestRender() {
             u => u.order
         );
 
-        // Пустые группы при активном фильтре не показываем:
+        // Пустые группы при активном фильтре (или поиске) не показываем:
         // они пусты из-за фильтра, а не сами по себе
-        if (filterActive) {
+        if (filterActive || searchQuery) {
             if (usersInGroup.length === 0) return;
         } else if (usersInGroup.length === 0 && !group.showIfEmpty && !isUngrouped) {
             return;
@@ -497,6 +537,28 @@ if (exportButton) {
     exportButton.addEventListener('click', () => openExportDialog());
 }
 
+// Поиск: фильтруем на лету, Esc — очистить
+if (userSearchInput) {
+    userSearchInput.addEventListener('input', () => {
+        searchQuery = userSearchInput.value.trim().toLowerCase();
+        requestRender();
+    });
+
+    userSearchInput.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        resetSearch();
+        requestRender();
+    });
+}
+
+if (userSearchClear) {
+    userSearchClear.addEventListener('click', () => {
+        resetSearch();
+        if (userSearchInput) userSearchInput.focus();
+        requestRender();
+    });
+}
+
 const yearSelect = document.getElementById('year-select');
 if (yearSelect) {
     const years = getAvailableYears();
@@ -542,6 +604,10 @@ function applyAccessRules() {
     // Загрузка из Excel — только администратор
     const importButton = document.getElementById('btn-import');
     if (importButton) importButton.style.display = 'none';
+
+    // Выгрузка в Excel тоже только администратор
+    const exportBtn = document.getElementById('btn-export-excel');
+    if (exportBtn) exportBtn.style.display = 'none';
 }
 
 applyAccessRules();

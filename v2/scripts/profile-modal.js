@@ -63,7 +63,7 @@ export async function openProfileModal(userId) {
 
     el('profile-popup-title').textContent = isOwnProfile ? 'Мой профиль' : (user.name || 'Профиль сотрудника');
     el('profile-popup-content').replaceChildren(
-        editable ? createFormElement(user) : buildReadOnly(getProfile(user))
+        editable ? createFormElement(user) : buildReadOnly(getProfile(user), !isAdmin() && !isOwnProfile)
     );
     updateNormSummary();
     popup.classList.add('popup_opened');
@@ -109,7 +109,7 @@ function createFormElement(user) {
 // Значения списка (getComboOptions) — в scripts/profile-form.js
 
 
-function buildReadOnly(profile) {
+function buildReadOnly(profile, maskPrivate) {
     const view = document.createElement('div');
     view.className = 'profile-view';
 
@@ -123,8 +123,14 @@ function buildReadOnly(profile) {
         view.appendChild(title);
 
         fields.forEach(field => {
+            // Табельный номер и дата приёма — персональные данные: чужие не показываем
+            const isPrivate = field.key === 'personnelNumber' || field.key === 'hireDate';
             const raw = profile[field.key];
-            const text = field.type === 'date' ? toTemplateDate(raw) : String(raw === undefined || raw === null ? '' : raw);
+            const hidden = maskPrivate && isPrivate && raw;
+
+            const text = hidden
+                ? '••••••'
+                : (field.type === 'date' ? toTemplateDate(raw) : String(raw === undefined || raw === null ? '' : raw));
 
             const row = document.createElement('div');
             row.className = 'profile-view__row';

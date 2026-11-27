@@ -577,6 +577,9 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
     const employees = (plan.employees || []).slice()
         .sort((a, b) => String(a.fullName).localeCompare(String(b.fullName), 'ru'));
 
+    // Группы, которых коснулся импорт — диалог свернёт их после записи
+    const touchedGroups = new Set();
+
     // Группы: находим существующую по имени или создаём новую
     const groupByName = new Map((state.groups || []).map(group => [String(group.name || '').toLowerCase(), group]));
     const groupColors = (state.groups || []).map(group => group.color).filter(Boolean);
@@ -618,9 +621,13 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
             endDate: vacation.endDate
         }));
 
+        if (targetGroupId) touchedGroups.add(targetGroupId);
+        else touchedGroups.add('ungrouped');
+
         if (existing) {
             const docRef = window.firestore.doc(window.db, 'vacationData_v2', String(state.year), 'users', existing.id);
-            const payload = { name: item.fullName, profile, vacations, order };
+            // после импорта карточки свёрнуты, чтобы список был компактным
+            const payload = { name: item.fullName, profile, vacations, order, isHidden: true };
             if (targetGroupId) payload.groupId = targetGroupId;
 
             await window.firestore.setDoc(docRef, payload, { merge: true });
@@ -643,7 +650,7 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
                 color,
                 vacations,
                 order,
-                isHidden: false,
+                isHidden: true,
                 isVisible: true,
                 groupId: targetGroupId || '',
                 profile
@@ -662,6 +669,7 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
 
     results.groupsCreated = createdGroups.length;
     results.groupNames = createdGroups.map(group => group.name);
+    results.groupIds = [...touchedGroups];
 
     return results;
 }

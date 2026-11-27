@@ -5,6 +5,7 @@ import { parseImportFile, buildImportPlan, applyImportPlan } from './excel-impor
 import { collectSnapshot, saveSnapshotToDb, downloadSnapshot } from './backup.js';
 import { logEvent } from './log.js';
 import { showNoticeLong } from './notice.js';
+import { setGroupCollapsed } from './view-prefs.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -156,7 +157,10 @@ async function runImport() {
             onProgress: (done, total) => { button.textContent = `Записываем ${done}/${total}`; }
         });
 
-        // 3. Журнал
+        // 3. После импорта список компактный: карточки свёрнуты (isHidden), группы тоже
+        (results.groupIds || []).forEach(id => setGroupCollapsed(id, true));
+
+        // 4. Журнал
         logEvent({
             action: 'data.import',
             level: 'warn',
