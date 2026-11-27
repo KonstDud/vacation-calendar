@@ -303,6 +303,62 @@ function renderVacationProblems(vacDiv, user, vac) {
     }
 }
 
+// Состояние «глаза» группы: все видимы / часть скрыта / скрыты все.
+// Отдельное состояние для «части» — иначе перечёркнутый глаз врёт,
+// когда внутри группы кто-то всё ещё виден.
+export function getGroupEyeState(groupId) {
+    const wanted = groupId === 'ungrouped' ? '' : (groupId || '');
+    const members = state.users.filter(user => (user.groupId || '') === wanted);
+    const total = members.length;
+    const visible = members.filter(user => !isUserHidden(user.id)).length;
+
+    if (total === 0) {
+        return {
+            total, visible, allVisible: true, dim: false,
+            icon: getIconEye(), color: 'var(--text-muted)',
+            title: 'В группе пока нет сотрудников'
+        };
+    }
+
+    if (visible === total) {
+        return {
+            total, visible, allVisible: true, dim: false,
+            icon: getIconEye(), color: 'var(--accent-green)',
+            title: 'Скрыть всех в группе'
+        };
+    }
+
+    if (visible === 0) {
+        return {
+            total, visible, allVisible: false, dim: true,
+            icon: getIconEyeOff(), color: 'var(--text-muted)',
+            title: 'Показать всех в группе (скрыты все)'
+        };
+    }
+
+    return {
+        total, visible, allVisible: false, dim: false,
+        icon: getIconEye(), color: '#f59e0b',
+        title: `Показать всех в группе (сейчас видно ${visible} из ${total})`
+    };
+}
+
+// Обновляем кнопку «скрыть/показать всех» в шапке группы после ручного клика по глазу
+function refreshGroupEye(userId) {
+    const card = document.getElementById(`user-card-${userId}`);
+    const block = card && card.closest ? card.closest('.group-block') : null;
+    if (!block) return;
+
+    const button = block.querySelector('.toggle-group-visibility');
+    if (!button) return;
+
+    const state = getGroupEyeState(block.dataset.groupId || '');
+    button.title = state.title;
+    button.style.color = state.color;
+    button.innerHTML = state.icon;
+    block.dataset.groupHidden = state.dim ? 'true' : 'false';
+}
+
 export function renderUserCard(user, requestRender, updateCalendarVacations) {
     const oldContainer = document.getElementById(`user-card-${user.id}`);
     if (!oldContainer) return;
@@ -351,7 +407,7 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     const dragHandle = `<div class="form__drag-handle-user" title="Перетащите, чтобы изменить порядок">${getIconDrag()}</div>`;
 
     // «Глаз» доступен всем: это личный фильтр показа на календаре
-    const eyeButton = `<button type="button" class="btn_icon eye-btn ${eyeClass}" title="${eyeTitle} · Alt+клик — оставить только его">
+    const eyeButton = `<button type="button" class="btn_icon eye-btn ${eyeClass}" title="${eyeTitle}">
                 ${eyeIcon}
             </button>`;
 
@@ -419,21 +475,10 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     if (eyeBtn) {
         eyeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-
-            // Alt+клик — оставить в этой группе видимым только его
-            if (e.altKey) {
-                const groupId = user.groupId || '';
-                state.users.forEach(other => {
-                    if ((other.groupId || '') !== groupId) return;
-                    setUserHidden(other.id, other.id !== user.id);
-                });
-                requestRender();
-                return;
-            }
-
             toggleUserHidden(user.id);
             renderUserCard(user, requestRender, updateCalendarVacations);
             updateCalendarVacations();
+            refreshGroupEye(user.id);
         });
     }
 

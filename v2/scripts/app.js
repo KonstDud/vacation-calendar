@@ -4,11 +4,11 @@ import { state, initState, stateEvents, getAvailableYears, updateGroup } from '.
 import { renderCalendar } from './calendar.js';
 import { initCalendarInteractions } from './calendar-interactions.js';
 import { initGroupsUI } from './groups.js';
-import { renderUserCard, scheduleSave } from './user-card.js';
+import { renderUserCard, scheduleSave, getGroupEyeState } from './user-card.js';
 import { updateCalendarVacations as renderCalendarVacations } from './calendar-grid.js';
 import { getIconEye, getIconEyeOff } from './utils.js';
 import { clearSession, getCurrentUserId, isAdmin, isAuthenticated } from './auth.js';
-import { isGroupHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, toggleGroupCollapsed, getPersonalOrder, setPersonalOrder } from './view-prefs.js';
+import { isGroupHidden, isUserHidden, setUserHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, toggleGroupCollapsed, getPersonalOrder, setPersonalOrder } from './view-prefs.js';
 import { initProfileModal, openProfileModal } from './profile-modal.js';
 import { updateUserChip, initUserChip } from './user-chip.js';
 import { showNotice } from './notice.js';
@@ -114,20 +114,35 @@ function requestRender() {
                 ? `<input type="color" class="group-color-picker-inline" value="${group.color}" title="Изменить цвет группы">`
                 : `<div class="group-color-picker-inline" style="background: ${group.color}; cursor: default;" title="Цвет группы (меняет администратор)"></div>`);
 
-        // Видимость группы — тоже личная настройка (у каждого своя)
-        const groupHidden = isGroupHidden(group.id);
-        groupBlock.dataset.groupHidden = groupHidden ? 'true' : 'false';
+        // Видимость сотрудников группы — личные «глаза». Кнопка в шапке группы
+        // скрывает/показывает сразу всех, чтобы не прокликивать каждого.
+        const groupMembers = usersInGroup.map(user => user.id);
+        const eyeState = getGroupEyeState(isUngrouped ? 'ungrouped' : group.id);
+
+        groupBlock.dataset.groupHidden = eyeState.dim ? 'true' : 'false';
 
         groupHeader.innerHTML = `
             ${colorPicker}
             <div class="group-name">${group.name} (${usersInGroup.length})</div>
             <div class="group-actions">
                 <button class="btn_icon toggle-group-btn" title="Свернуть/Развернуть">▼</button>
-                <button class="btn_icon btn_icon-group toggle-group-visibility" title="${groupHidden ? 'Показать группу' : 'Скрыть группу'}" style="color: ${groupHidden ? 'var(--text-muted)' : 'var(--accent-green)'}">
-                    ${groupHidden ? getIconEyeOff() : getIconEye()}
+                <button class="btn_icon btn_icon-group toggle-group-visibility" title="${eyeState.title}" style="color: ${eyeState.color}">
+                    ${eyeState.icon}
                 </button>
             </div>
         `;
+
+        groupHeader.querySelector('.toggle-group-visibility').addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            // состояние считаем в момент клика: после ручных кликов по глазам
+            // подпись обновилась, а сохранённое значение — уже устарело
+            const current = getGroupEyeState(isUngrouped ? 'ungrouped' : group.id);
+            groupMembers.forEach(id => setUserHidden(id, current.allVisible));
+
+            requestRender();
+            updateCalendarVacations();
+        });
 
         if (!isUngrouped && admin) {
             groupHeader.querySelector('.group-color-picker-inline').addEventListener('change', async (e) => {
@@ -160,13 +175,6 @@ function requestRender() {
                 groupUsersContainer.classList.remove('collapsed');
                 e.target.textContent = '▲';
             }
-        });
-
-        groupHeader.querySelector('.toggle-group-visibility').addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleGroupHidden(group.id);
-            // Перерисовываем панель: иначе у карточек остаётся старое состояние
-            requestRender();
         });
 
         usersInGroup.forEach(user => {
