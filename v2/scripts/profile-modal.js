@@ -188,16 +188,22 @@ async function saveProfile() {
 
         currentUser.profile = profile;
         currentUser.name = fullName;
-        stateEvents.dispatchEvent(new Event('statechange'));
-        closeProfileModal();
 
+        // Записываем в журнал ДО закрытия окна: closeProfileModal обнуляет currentUser
         logEvent({
             action: 'user.profile',
             message: `Обновил профиль «${fullName}»`,
             targetId: currentUser.id,
             targetName: fullName,
-            details: { position: profile.position, personnelNumber: profile.personnelNumber }
+            details: {
+                position: profile.position,
+                email: profile.email,
+                personnelNumber: profile.personnelNumber
+            }
         });
+
+        stateEvents.dispatchEvent(new Event('statechange'));
+        closeProfileModal();
     } catch (error) {
         console.error('[profile] Ошибка сохранения:', error);
     } finally {

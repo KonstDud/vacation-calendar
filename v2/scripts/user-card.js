@@ -309,12 +309,13 @@ function renderVacationProblems(vacDiv, user, vac) {
 export function getGroupEyeState(groupId) {
     const wanted = groupId === 'ungrouped' ? '' : (groupId || '');
     const members = state.users.filter(user => (user.groupId || '') === wanted);
+    const memberIds = members.map(user => user.id);
     const total = members.length;
     const visible = members.filter(user => !isUserHidden(user.id)).length;
 
     if (total === 0) {
         return {
-            total, visible, allVisible: true, dim: false,
+            total, visible, allVisible: true, dim: false, memberIds,
             icon: getIconEye(), color: 'var(--text-muted)',
             title: 'В группе пока нет сотрудников'
         };
@@ -322,7 +323,7 @@ export function getGroupEyeState(groupId) {
 
     if (visible === total) {
         return {
-            total, visible, allVisible: true, dim: false,
+            total, visible, allVisible: true, dim: false, memberIds,
             icon: getIconEye(), color: 'var(--accent-green)',
             title: 'Скрыть всех в группе'
         };
@@ -330,14 +331,14 @@ export function getGroupEyeState(groupId) {
 
     if (visible === 0) {
         return {
-            total, visible, allVisible: false, dim: true,
+            total, visible, allVisible: false, dim: true, memberIds,
             icon: getIconEyeOff(), color: 'var(--text-muted)',
             title: 'Показать всех в группе (скрыты все)'
         };
     }
 
     return {
-        total, visible, allVisible: false, dim: false,
+        total, visible, allVisible: false, dim: false, memberIds,
         icon: getIconEye(), color: '#f59e0b',
         title: `Показать всех в группе (сейчас видно ${visible} из ${total})`
     };

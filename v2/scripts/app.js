@@ -175,10 +175,10 @@ function requestRender() {
         groupHeader.querySelector('.toggle-group-visibility').addEventListener('click', (e) => {
             e.stopPropagation();
 
-            // состояние считаем в момент клика: после ручных кликов по глазам
-            // подпись обновилась, а сохранённое значение — уже устарело
+            // Считаем состояние и список участников в момент клика по ВСЕМ сотрудникам
+            // группы (а не только по прошедшим фильтр/поиск) — иначе глаз «не выключает»
             const current = getGroupEyeState(isUngrouped ? 'ungrouped' : group.id);
-            groupMembers.forEach(id => setUserHidden(id, current.allVisible));
+            current.memberIds.forEach(id => setUserHidden(id, current.allVisible));
 
             requestRender();
             updateCalendarVacations();
