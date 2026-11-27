@@ -18,6 +18,9 @@ const COLUMNS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'
 const AUTO_NOTE_RE = /(не хватает \d+ (?:день|дня|дней)|\d+ (?:день|дня|дней) лишн\w*|лишний 1 день|лишни[ех] \d+ дн\w*)/gi;
 
 const decodeXml = (value) => String(value || '')
+    // числовые ссылки вида &#1054; — так Excel пишет кириллицу
+    .replace(/&#(\d+);/g, (match, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (match, code) => String.fromCharCode(parseInt(code, 16)))
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
@@ -93,6 +96,36 @@ function toIsoDate(raw, isNumeric) {
     return '';
 }
 
+// Ячейки строки. Разбираем по частям (split по </c>), а не одной регуляркой:
+// так одинаково работают и <c .../> (пустые), и <c ...><is><t>текст</t></is></c>.
+function parseRowCells(body, sharedStrings, cells) {
+    body.split('</c>').forEach(part => {
+        let cursor = 0;
+
+        while (cursor < part.length) {
+            const openIndex = part.indexOf('<c ', cursor);
+            if (openIndex === -1) break;
+
+            const openEnd = part.indexOf('>', openIndex);
+            if (openEnd === -1) break;
+
+            const attrs = part.slice(openIndex + 2, openEnd);
+            const ref = (attrs.match(/r="([A-Z]+)\d+"/) || [])[1];
+            // тип бывает и inlineStr (с заглавной S), поэтому буквы любые
+            const type = (attrs.match(/t="([A-Za-z]+)"/) || [])[1] || '';
+            const selfClosing = attrs.trim().endsWith('/');
+
+            if (ref) {
+                const nextOpen = part.indexOf('<c ', openEnd);
+                const inner = selfClosing ? '' : part.slice(openEnd + 1, nextOpen === -1 ? part.length : nextOpen);
+                cells[ref] = { type, inner, sharedStrings };
+            }
+
+            cursor = openEnd + 1;
+        }
+    });
+}
+
 // Строки листа: { rowNumber, hidden, cells: { A: {type, inner, sharedStrings}, ... } }
 function readRows(xml, sharedStrings) {
     const rows = [];
@@ -106,31 +139,57 @@ function readRows(xml, sharedStrings) {
         const hidden = /hidden="(1|true)"/.test(attrs);
 
         const cells = {};
-        const cellRe = /<c\s([^>]*?)(\/?)>/g;
-        let cellMatch = cellRe.exec(body);
-
-        while (cellMatch) {
-            const cellAttrs = cellMatch[1] || '';
-            const selfClosing = cellMatch[2] === '/';
-            const ref = (cellAttrs.match(/r="([A-Z]+)\d+"/) || [])[1];
-            const type = (cellAttrs.match(/t="([a-z]+)"/) || [])[1] || '';
-
-            let inner = '';
-            if (!selfClosing) {
-                const end = body.indexOf('</c>', cellRe.lastIndex);
-                inner = end === -1 ? '' : body.slice(cellRe.lastIndex, end);
-                cellRe.lastIndex = end === -1 ? body.length : end + 4;
-            }
-
-            if (ref) cells[ref] = { type, inner, sharedStrings };
-            cellMatch = cellRe.exec(body);
-        }
+        if (body.includes('<c ')) parseRowCells(body, sharedStrings, cells);
 
         rows.push({ rowNumber, hidden, cells });
         rowMatch = rowRe.exec(xml);
     }
 
     return rows;
+}
+
+// Автофильтр из файла: Excel хранит только критерии, поэтому читаем их
+// и берём строки, которые под них подходят (простые списки значений).
+function readAutoFilter(xml) {
+    const match = xml.match(/<autoFilter[^>]*>([\s\S]*?)<\/autoFilter>/);
+    if (!match) return { filters: [], unsupported: false };
+
+    const filters = [];
+    let unsupported = false;
+
+    const columnRe = /<filterColumn([^>]*)>([\s\S]*?)<\/filterColumn>/g;
+    let columnMatch = columnRe.exec(match[1]);
+
+    while (columnMatch) {
+        const colId = Number((columnMatch[1].match(/colId="(\d+)"/) || [])[1] || 0);
+        const body = columnMatch[2];
+
+        const values = [];
+        const valueRe = /<filter\s+val="([^"]*)"/g;
+        let valueMatch = valueRe.exec(body);
+
+        while (valueMatch) {
+            values.push(decodeXml(valueMatch[1]));
+            valueMatch = valueRe.exec(body);
+        }
+
+        if (values.length === 0) unsupported = true;     // customFilters и top10 не разбираем
+        filters.push({ column: COLUMNS[colId], values });
+        columnMatch = columnRe.exec(match[1]);
+    }
+
+    return { filters, unsupported };
+}
+
+function rowMatchesFilter(row, filter, sharedStrings) {
+    if (!filter || filter.filters.length === 0) return true;
+
+    return filter.filters.every(item => {
+        if (item.values.length === 0) return true;
+
+        const value = cellText(row.cells[item.column]).trim();
+        return item.values.some(expected => expected === value);
+    });
 }
 
 function cellText(cell) {
@@ -175,7 +234,8 @@ const PROFILE_COLUMNS = {
 
 const NORM_COLUMNS = [['J', 'annualDays'], ['K', 'northernDays'], ['L', 'irregularDays']];
 
-const isNumericCell = (cell) => !!cell && !cell.type;
+// Числовая ячейка: тип либо не указан, либо «n» (Excel пишет явный t="n")
+const isNumericCell = (cell) => !!cell && (cell.type === '' || cell.type === 'n');
 
 function readVacation(row, sharedStrings) {
     const startCell = row.cells.N;
@@ -238,7 +298,19 @@ export async function parseImportFile(file) {
     const sharedStrings = readSharedStrings(sharedFile ? await sharedFile.async('string') : '');
     const xml = await sheetFile.async('string');
 
-    const rows = readRows(xml, sharedStrings).filter(row => row.rowNumber >= FIRST_DATA_ROW);
+    const allRows = readRows(xml, sharedStrings);
+    const rows = allRows.filter(row => row.rowNumber >= FIRST_DATA_ROW);
+    const fileFilter = readAutoFilter(xml);
+
+    // Названия колонок из шапки (строка 3) — чтобы подписи в предпросмотре были понятными
+    const headerRow = allRows.find(row => row.rowNumber === FIRST_DATA_ROW - 1);
+    const headerNames = {};
+    if (headerRow) {
+        COLUMNS.forEach(column => {
+            const text = cellText(headerRow.cells[column]).replace(/\s+/g, ' ').trim();
+            if (text) headerNames[column] = text;
+        });
+    }
 
     const employees = [];
     const byKey = new Map();
@@ -249,6 +321,12 @@ export async function parseImportFile(file) {
     rows.forEach(row => {
         if (row.hidden) {
             skipped.push({ row: row.rowNumber, reason: 'строка скрыта в файле' });
+            return;
+        }
+
+        // Если в файле включён автофильтр — берём только подходящие строки
+        if (!rowMatchesFilter(row, fileFilter, sharedStrings)) {
+            skipped.push({ row: row.rowNumber, reason: 'не подходит под фильтр в файле' });
             return;
         }
 
@@ -309,7 +387,7 @@ export async function parseImportFile(file) {
         employee.vacations.sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
     });
 
-    return { employees, skipped, rowsWithData };
+    return { employees, skipped, rowsWithData, filter: fileFilter, headerNames };
 }
 
 // --- сопоставление с текущими сотрудниками ---
@@ -372,10 +450,18 @@ export function buildImportPlan(parsed, existingUsers) {
     });
 
     const vacationCount = employees.reduce((sum, item) => sum + item.vacations.length, 0);
+    const filter = parsed.filter || { filters: [], unsupported: false };
+    const headerNames = parsed.headerNames || {};
+    const filterNote = filter.filters.length > 0
+        ? 'Загружаем только строки, отобранные фильтром в файле: ' + filter.filters
+            .map(item => `${headerNames[item.column] || `колонка ${item.column}`} — ${item.values.join(', ')}`)
+            .join('; ')
+        : '';
 
     return {
         employees,
         skipped,
+        filterNote,
         stats: {
             rows: parsed.rowsWithData || 0,
             employees: employees.length,
@@ -390,20 +476,87 @@ export function buildImportPlan(parsed, existingUsers) {
 
 // --- применение ---
 
-const randomColor = () => '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+// --- цвета: подбираем заметно отличающиеся ---
+
+function hslToHex(hue, saturation, lightness) {
+    const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+    const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+    const m = lightness - c / 2;
+
+    let rgb = [c, x, 0];
+    if (hue >= 60 && hue < 120) rgb = [x, c, 0];
+    else if (hue >= 120 && hue < 180) rgb = [0, c, x];
+    else if (hue >= 180 && hue < 240) rgb = [0, x, c];
+    else if (hue >= 240 && hue < 300) rgb = [x, 0, c];
+    else if (hue >= 300) rgb = [c, 0, x];
+
+    return '#' + rgb.map(value => Math.round((value + m) * 255).toString(16).padStart(2, '0')).join('');
+}
+
+function hexToRgb(hex) {
+    const match = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+    if (!match) return null;
+
+    const value = parseInt(match[1], 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function colorDistance(first, second) {
+    const a = hexToRgb(first);
+    const b = hexToRgb(second);
+    if (!a || !b) return 999;
+
+    return Math.sqrt(a.reduce((sum, value, index) => sum + (value - b[index]) ** 2, 0));
+}
+
+// Берём цвет из палитры, максимально далёкий от уже занятых —
+// чтобы у импортированных сотрудников цвета были разные и не сливались
+function pickImportColor(usedColors) {
+    const candidates = [];
+    for (let hue = 0; hue < 360; hue += 24) {
+        candidates.push(hslToHex(hue, 0.62, 0.55));
+        candidates.push(hslToHex((hue + 12) % 360, 0.5, 0.42));
+    }
+
+    if (usedColors.length === 0) {
+        return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    let best = candidates[0];
+    let bestScore = -1;
+
+    candidates.forEach(candidate => {
+        const nearest = Math.min(...usedColors.map(used => colorDistance(candidate, used)));
+        const score = nearest + Math.random() * 8;
+        if (score > bestScore) {
+            bestScore = score;
+            best = candidate;
+        }
+    });
+
+    return best;
+}
 
 /**
  * Записываем план в базу.
  * Отпуска найденных сотрудников ЗАМЕНЯЮТСЯ тем, что в файле;
  * профиль дополняется значениями из файла (пустые ячейки ничего не затирают).
+ * Импортированные сотрудники идут по алфавиту.
  */
 export async function applyImportPlan(plan, { onProgress } = {}) {
     const results = { created: 0, updated: 0, vacations: 0, profiles: 0 };
-    const employees = plan.employees || [];
+
+    const usedColors = (state.users || []).map(user => user.color).filter(Boolean);
+    const employees = (plan.employees || []).slice()
+        .sort((a, b) => String(a.fullName).localeCompare(String(b.fullName), 'ru'));
+
+    // Импортированные ставим отдельным алфавитным блоком
+    const baseOrder = 1000000;
 
     for (let index = 0; index < employees.length; index += 1) {
         const item = employees[index];
         const existing = item.existingId ? state.users.find(user => user.id === item.existingId) : null;
+        const order = baseOrder + index * 10;
 
         const profile = { ...((existing && existing.profile) || {}), ...item.profile };
         const vacations = (item.vacations || []).map((vacation, vacationIndex) => ({
@@ -414,21 +567,25 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
 
         if (existing) {
             const docRef = window.firestore.doc(window.db, 'vacationData_v2', String(state.year), 'users', existing.id);
-            await window.firestore.setDoc(docRef, { name: item.fullName, profile, vacations }, { merge: true });
+            await window.firestore.setDoc(docRef, { name: item.fullName, profile, vacations, order }, { merge: true });
 
             existing.name = item.fullName;
             existing.profile = profile;
             existing.vacations = vacations;
+            existing.order = order;
             results.updated += 1;
         } else {
             const collectionRef = window.firestore.collection(window.db, 'vacationData_v2', String(state.year), 'users');
             const docRef = window.firestore.doc(collectionRef);
 
+            const color = pickImportColor(usedColors);
+            usedColors.push(color);
+
             const newUser = {
                 name: item.fullName,
-                color: randomColor(),
+                color,
                 vacations,
-                order: Date.now() + index,
+                order,
                 isHidden: false,
                 isVisible: true,
                 groupId: '',

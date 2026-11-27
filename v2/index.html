@@ -97,8 +97,7 @@
                 <div id="users-container"></div>
 
                 <div class="side-footer">
-                    <!-- Временно скрыта: парсер xlsx доводится (см. отчёт) -->
-                    <button type="button" class="btn_small" id="btn-import" hidden>Загрузить из Excel</button>
+                    <button type="button" class="btn_small" id="btn-import">Загрузить из Excel</button>
                     <button type="button" class="btn_small" id="btn-export-excel">Выгрузить в Excel</button>
                     <button type="button" class="btn_link" id="btn-reset">Сбросить всё</button>
                 </div>
@@ -212,9 +211,8 @@
                         <input type="file" id="import-file" accept=".xlsx" />
                         <span class="import-file__name" id="import-file-name">Выберите файл .xlsx</span>
                     </label>
-                    <p class="import-hint">Подходит тот же шаблон (колонки A–Q, данные с 4-й строки):
-                        и ваш исходный файл, и наша выгрузка. Пока не нажмёте «Применить»,
-                        в базе ничего не меняется.</p>
+                    <p class="import-hint">Выберите файл графика в Excel (.xlsx). Перед загрузкой мы покажем,
+                        кого нашли в файле и что изменится, — в базу данные попадут только после кнопки «Применить».</p>
                 </div>
 
                 <div id="import-step-preview" hidden>

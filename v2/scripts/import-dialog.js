@@ -73,6 +73,7 @@ function renderPreview(fileName) {
     el('import-summary').innerHTML = `Файл: <b>${escapeHtml(fileName)}</b><br>`
         + `Строк с данными: <b>${stats.rows}</b> · сотрудников: <b>${stats.employees}</b> `
         + `(новых <b>${stats.newCount}</b>, обновляем <b>${stats.existingCount}</b>) · периодов отпусков: <b>${stats.vacations}</b>`
+        + (plan.filterNote ? `<br><span class="import-note-line">${escapeHtml(plan.filterNote)}</span>` : '')
         + (stats.skipped > 0 ? `<br><span class="import-warn">Пропущено строк: ${stats.skipped}</span>` : '')
         + (stats.invalid > 0 ? `<br><span class="import-warn">Периодов с ошибкой в датах: ${stats.invalid} — импортируем как есть</span>` : '');
 

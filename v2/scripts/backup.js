@@ -4,10 +4,28 @@
 import { state } from './state.js';
 import { getCurrentUserId, getCurrentUserName } from './auth.js';
 
-const BACKUPS_COLLECTION = 'backups';
+// Путь обязательно с нечётным числом сегментов (коллекция/документ/коллекция),
+// иначе Firestore считает это документом и падает с «Invalid collection reference»
+const BACKUPS_PATH = ['vacationData_v2', 'meta', 'backups'];
 
 // Больше не держим: снимок — это полный слепок данных, они копятся быстрее журнала
 const MAX_BACKUPS = 5;
+
+function backupsCollection() {
+    return window.firestore.collection(window.db, ...BACKUPS_PATH);
+}
+
+// Имя файла копии — с датой и временем, чтобы копии не перезаписывали друг друга
+export function snapshotFileName(snapshot, label) {
+    const date = new Date((snapshot && snapshot.createdAt) || Date.now());
+    const pad = (value) => String(value).padStart(2, '0');
+    const stamp = `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} `
+        + `${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+    const year = (snapshot && snapshot.year) || '';
+    const suffix = label ? ` ${label}` : '';
+
+    return `Резервная копия график ${year}${suffix} (${stamp}).json`;
+}
 
 // Слепок текущих данных: то, что можно восстановить вручную
 export function collectSnapshot() {
@@ -28,7 +46,7 @@ export function downloadSnapshot(snapshot, label) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Резервная копия график ${snapshot.year}${label ? ' ' + label : ''}.json`;
+    link.download = snapshotFileName(snapshot, label);
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -37,7 +55,7 @@ export function downloadSnapshot(snapshot, label) {
 
 // Снимок в базе: vacationData_v2/backups/{id}
 export async function saveSnapshotToDb(snapshot, reason) {
-    const colRef = window.firestore.collection(window.db, 'vacationData_v2', BACKUPS_COLLECTION);
+    const colRef = backupsCollection();
     const ref = window.firestore.doc(colRef);
 
     await window.firestore.setDoc(ref, {
@@ -59,7 +77,7 @@ export async function saveSnapshotToDb(snapshot, reason) {
 // Сколько снимков храним
 export async function pruneBackups(limit = MAX_BACKUPS) {
     const { query, orderBy, getDocs, deleteDoc } = window.firestore;
-    const colRef = window.firestore.collection(window.db, 'vacationData_v2', BACKUPS_COLLECTION);
+    const colRef = backupsCollection();
 
     try {
         const snapshot = await getDocs(query(colRef, orderBy('createdAt', 'desc')));
@@ -83,7 +101,7 @@ export async function pruneBackups(limit = MAX_BACKUPS) {
 // Список снимков — пригодится, чтобы показать, что есть
 export async function listBackups() {
     const { query, orderBy, getDocs } = window.firestore;
-    const colRef = window.firestore.collection(window.db, 'vacationData_v2', BACKUPS_COLLECTION);
+    const colRef = backupsCollection();
 
     const snapshot = await getDocs(query(colRef, orderBy('createdAt', 'desc')));
     const items = [];
