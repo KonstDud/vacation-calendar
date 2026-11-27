@@ -222,3 +222,20 @@ export function validateProfile(profile) {
 export function hasProfileErrors(errors) {
     return Object.keys(errors || {}).length > 0;
 }
+
+// --- служебные пометки в «Примечании» ---
+// Их дописывает выгрузка в Excel («не хватает 9 дней», «лишний 1 день» и т.п.).
+// Хранить их в профиле не нужно, иначе при следующей выгрузке они задвоятся.
+// Классы намеренно БЕЗ кириллицы: «\w» в JS её не матчит, а буква «й» может быть
+// записана составной (и + бревис), поэтому вместо букв берём «любой не-разделитель».
+export const AUTO_NOTE_RE = /(?:не\s+хватает\s+\d*\s*дн[^0-9;,\s]{0,6}|лишн[^0-9;,\s]{0,6}\s*\d*\s*дн[^0-9;,\s]{0,6}|\d+\s+дн[^0-9;,\s]{0,6}\s+лишн[^0-9;,\s]{0,6})/gi;
+
+export function stripAutoNotes(note) {
+    return String(note || '')
+        .replace(AUTO_NOTE_RE, '')
+        .replace(/\s*;\s*(?=;|$)/g, '')
+        .replace(/^\s*[;,]\s*/, '')
+        .replace(/\s*[;,]\s*$/, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+}

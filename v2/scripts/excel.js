@@ -6,7 +6,7 @@
 import { state } from './state.js';
 import {
     getProfile, getEntitlement, isParentalLeave,
-    formatOverDays, formatShortDays, toTemplateDate, composeFullName
+    formatOverDays, formatShortDays, toTemplateDate, composeFullName, stripAutoNotes
 } from './profile.js';
 import { getCalendarDays } from './utils.js';
 
@@ -93,7 +93,11 @@ export function buildExportRows(users) {
             else if (totalDays < entitlement) balanceNote = formatShortDays(entitlement - totalDays);
         }
 
-        const note = [profile.note, balanceNote].filter(Boolean).join('; ');
+        // Примечание: убираем старые служебные пометки и не задваиваем такую же свежую
+        const profileNote = stripAutoNotes(profile.note);
+        const note = balanceNote && !profileNote.includes(balanceNote)
+            ? [profileNote, balanceNote].filter(Boolean).join('; ')
+            : profileNote;
 
         // В шаблон всегда уходит ФИО: «Фамилия Имя Отчество»
         const fullName = composeFullName(profile) || user.name;

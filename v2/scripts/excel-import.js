@@ -6,7 +6,7 @@
 
 import { loadJSZip } from './excel.js';
 import { state, addGroup } from './state.js';
-import { fromTemplateDate, splitFullName } from './profile.js';
+import { fromTemplateDate, splitFullName, stripAutoNotes } from './profile.js';
 
 const SHEET_PATH = 'xl/worksheets/sheet1.xml';
 const SHARED_PATH = 'xl/sharedStrings.xml';
@@ -14,12 +14,8 @@ const FIRST_DATA_ROW = 4;
 
 const COLUMNS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q'];
 
-// Автоматические пометки нашей выгрузки — обратно в профиль их не тянем
-// Автоматические пометки, которые мы дописываем в «Примечание» при выгрузке.
-// Обратно в профиль они попадать не должны, поэтому убираем все формулировки
-// шаблона: «не хватает 9 дней», «не хватает 4 дня», «лишний 1 день»,
-// «лишние 2 дня», «лишних 18 дней», «лишние дни».
-const AUTO_NOTE_RE = /(?:не\s+хватает\s+\d*\s*дн[а-яё]*|лишн[а-яё]*\s*\d*\s*дн[а-яё]*|\d+\s+дн[а-яё]*\s+лишн[а-яё]*)/gi;
+// Служебные пометки («не хватает 9 дней», «лишний 1 день») описаны в profile.js:
+// их убирает stripAutoNotes, импортированный ниже
 
 const decodeXml = (value) => String(value || '')
     // числовые ссылки вида &#1054; — так Excel пишет кириллицу
@@ -31,16 +27,6 @@ const decodeXml = (value) => String(value || '')
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, '&');
 
-// Убираем из примечания наши автоматические пометки, чтобы они не попали в профиль
-function stripAutoNotes(note) {
-    return String(note || '')
-        .replace(AUTO_NOTE_RE, '')
-        .replace(/\s*;\s*(?=;|$)/g, '')          // «текст; ;» — пустые хвосты
-        .replace(/^\s*[;,]\s*/, '')
-        .replace(/\s*[;,]\s*$/, '')
-        .replace(/\s{2,}/g, ' ')
-        .trim();
-}
 
 // --- разбор XML листа ---
 
