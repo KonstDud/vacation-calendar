@@ -2,7 +2,7 @@
 import { state, discardPendingRemote } from './state.js';
 import { getCalendarDays, getWorkingDays, validateInternalOverlap, getExternalOverlaps, getIconEye, getIconEyeOff, getIconWarning, getIconDrag, getIconProfile, countDaysFromYearStart } from './utils.js';
 import { highlightUserVacations, clearUserVacationHighlight, highlightVacationPeriod, clearVacationPeriodHighlight, getHighlightedVacationId, scrollToVacationPeriod, isUserShownOnCalendar } from './calendar-grid.js';
-import { canEditUser, canManageUsers } from './auth.js';
+import { canEditUser, canManageUsers, isKnownAdmin } from './auth.js';
 import { isUserHidden, isGroupHidden, toggleUserHidden, setUserHidden, getOverlapScope } from './view-prefs.js';
 import { openProfileModal } from './profile-modal.js';
 import { updateUserChip } from './user-chip.js';
@@ -426,6 +426,7 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
             ${eyeButton}
             <div class="form__username-wrapper">
                 <h2 class="form__username">${escapeHtml(shortName)}</h2>
+                ${isKnownAdmin(user.id) ? '<span class="form__admin-badge" title="Администратор">★</span>' : ''}
                 <div class="form__username-tooltip">${escapeHtml(fullName)}</div>
             </div>
             <span class="form__balance" id="balance-${user.id}" hidden></span>

@@ -1,2 +1,121 @@
 /* 07-admin.css — стили страницы администрирования */
-/* Наполняется на следующем шаге (страница admin.html). */
+
+/* --- Панель администрирования в окне профиля --- */
+
+.popup__content_admin {
+    padding: 8px 0 0;
+}
+
+.admin-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.admin-panel__section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-panel__title {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.admin-panel__search {
+    max-width: 420px;
+}
+
+.admin-panel__table {
+    max-height: 42vh;
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-main);
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.admin-table th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-card);
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.admin-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.admin-table__name {
+    min-width: 180px;
+}
+
+.admin-table__role {
+    font-size: 12px;
+    padding: 4px 24px 4px 8px;
+}
+
+.admin-table__actions {
+    display: flex;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.admin-table__delete {
+    color: var(--accent-red) !important;
+}
+
+.admin-pass {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-pass__label {
+    min-width: 170px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.admin-pass .profile-form__input {
+    flex: 1;
+    min-width: 180px;
+}
+
+.admin-panel__hint {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+.admin-panel__hint_warn {
+    color: #f59e0b;
+}
+
+.admin-panel__status {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+

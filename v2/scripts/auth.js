@@ -139,6 +139,13 @@ export async function setAdminPassword(password) {
     await window.firestore.setDoc(docRef('auth', 'adminPassword'), { ...record, updatedAt: Date.now() }, { merge: true });
 }
 
+// Общий пароль команды хранится как SHA-256 (так его проверяет verifyTeamPassword)
+export async function setTeamPassword(password) {
+    const hash = await sha256Hex(password);
+    await window.firestore.setDoc(docRef('auth', 'password'), { hash, updatedAt: Date.now() }, { merge: true });
+    return hash;
+}
+
 // --- доступы сотрудников ---
 
 export async function getAccessRecord(userId) {
@@ -173,4 +180,36 @@ export async function listAccessRecords() {
     const records = {};
     snap.forEach(doc => { records[doc.id] = doc.data(); });
     return records;
+}
+
+// --- кто из сотрудников администратор (для значков в интерфейсе) ---
+
+let adminIds = null;
+let adminIdsPromise = null;
+
+// Один запрос на всю страницу; повторные вызовы используют результат
+export function loadAdminIds() {
+    if (adminIdsPromise) return adminIdsPromise;
+
+    adminIdsPromise = window.firestore.getDocs(window.firestore.collection(window.db, ACCESS_COLLECTION))
+        .then(snapshot => {
+            adminIds = new Set();
+            snapshot.forEach(doc => {
+                if ((doc.data() || {}).role === ROLES.ADMIN) adminIds.add(doc.id);
+            });
+            return adminIds;
+        })
+        .catch(error => {
+            console.warn('[auth] не удалось прочитать роли сотрудников:', error);
+            adminIds = new Set();
+            return adminIds;
+        });
+
+    return adminIdsPromise;
+}
+
+// Значки показываем только если роли уже загрузились
+export function isKnownAdmin(userId) {
+    if (!adminIds || !userId) return false;
+    return adminIds.has(userId);
 }

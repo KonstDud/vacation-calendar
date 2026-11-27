@@ -139,11 +139,23 @@
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    width: 100%;
+    /* Занимает всё место, но оставляет его под звёздочку администратора */
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .form__username:hover {
     text-decoration: underline;
+}
+
+/* Звёздочка администратора рядом с именем в карточке */
+.form__admin-badge {
+    flex-shrink: 0;
+    margin-left: 4px;
+    font-size: 11px;
+    line-height: 1;
+    color: #f59e0b;
+    cursor: default;
 }
 
 /* ТУЛТИП (теперь открывается ВВЕРХ) */
@@ -742,6 +754,33 @@ input[type="number"] {
     max-width: 230px;
 }
 
+/* --- Администратор: золотой аватар и звёздочка --- */
+.user-chip__avatar_admin {
+    background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+    position: relative;
+}
+
+/* У входа «Администратор» внутри щит — значок не нужен */
+.user-chip__avatar_admin:not(.user-chip__avatar_root)::after {
+    content: '★';
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 14px;
+    height: 14px;
+    line-height: 13px;
+    text-align: center;
+    border-radius: 50%;
+    background: #f59e0b;
+    color: #1e1e1e;
+    font-size: 9px;
+    border: 1px solid var(--bg-card);
+}
+
+.user-chip__avatar_root {
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.55);
+}
+
 /* --- Модалка профиля --- */
 /* Специфичность выше, чем у .popup__container из 05-popup.css */
 .popup__container.popup__container_profile {
@@ -1015,6 +1054,23 @@ textarea.profile-form__input {
     max-height: 58vh;
     overflow-y: auto;
     padding-right: 4px;
+}
+
+/* Плашка «Администратор» в окне профиля */
+.profile-view__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    margin-bottom: 12px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #f59e0b;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
 }
 
 .profile-view__row {

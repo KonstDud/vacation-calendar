@@ -7,7 +7,7 @@ import { initGroupsUI } from './groups.js';
 import { renderUserCard, scheduleSave, getGroupEyeState } from './user-card.js';
 import { updateCalendarVacations as renderCalendarVacations } from './calendar-grid.js';
 import { getIconEye, getIconEyeOff } from './utils.js';
-import { clearSession, getCurrentUserId, isAdmin, isAuthenticated } from './auth.js';
+import { clearSession, getCurrentUserId, isAdmin, isAuthenticated, loadAdminIds } from './auth.js';
 import { isGroupHidden, isUserHidden, setUserHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, toggleGroupCollapsed, getPersonalOrder, setPersonalOrder } from './view-prefs.js';
 import { initProfileModal, openProfileModal } from './profile-modal.js';
 import { updateUserChip, initUserChip } from './user-chip.js';
@@ -628,6 +628,12 @@ if (isAuthenticated()) {
         initResetDialog();
         initImportDialog();
         initCalendarInteractions();
-        initState();
+
+        // Роли читаем один раз: после этого у администраторов появляются значки
+        initState().then(async () => {
+            await loadAdminIds();
+            updateUserChip();
+            requestRender();
+        });
     });
 }

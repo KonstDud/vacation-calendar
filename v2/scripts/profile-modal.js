@@ -4,8 +4,9 @@ import { state, stateEvents } from './state.js';
 import { loadDictionaries } from './dictionaries.js';
 import { PROFILE_FIELDS, PROFILE_SECTIONS, getProfile, getEntitlement, isParentalLeave, toTemplateDate, sanitizeProfile, validateProfile, hasProfileErrors, composeFullName } from './profile.js';
 import { createProfileForm } from './profile-form.js';
-import { canEditUser, getCurrentUserId, clearSession, isAdmin } from './auth.js';
+import { canEditUser, getCurrentUserId, clearSession, isAdmin, isKnownAdmin } from './auth.js';
 import { logEvent } from './log.js';
+import { renderAdminPanel } from './admin-panel.js';
 
 const el = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? '')
@@ -50,6 +51,21 @@ export async function openProfileModal(userId) {
 
     el('profile-norm').textContent = '';
 
+    // Глобальный администратор: в этом же окне показываем администрирование —
+    // отдельная страница и кнопка не нужны, профиль у этого входа всё равно пустой
+    if (!userId && isAdmin()) {
+        el('profile-popup-title').textContent = 'Администрирование';
+        el('profile-popup-delete').hidden = true;
+        el('profile-popup-save').style.display = 'none';
+        el('profile-popup-content').classList.add('popup__content_admin');
+        popup.classList.add('popup_opened');
+
+        await renderAdminPanel(el('profile-popup-content'));
+        return;
+    }
+
+    el('profile-popup-content').classList.remove('popup__content_admin');
+
     if (!user) {
         el('profile-popup-title').textContent = 'Профиль';
         el('profile-popup-content').innerHTML = `<div class="profile-view__row">${
@@ -61,10 +77,16 @@ export async function openProfileModal(userId) {
 
     await loadDictionaries();
 
-    el('profile-popup-title').textContent = isOwnProfile ? 'Мой профиль' : (user.name || 'Профиль сотрудника');
-    el('profile-popup-content').replaceChildren(
-        editable ? createFormElement(user) : buildReadOnly(getProfile(user), !isAdmin() && !isOwnProfile)
-    );
+    el('profile-popup-title').textContent = isOwnProfile
+        ? 'Мой профиль'
+        : (user.name ? `${user.name}${isKnownAdmin(user.id) ? ' — администратор' : ''}` : 'Профиль сотрудника');
+    const adminBadge = (user && isKnownAdmin(user.id)) ? buildAdminBadge() : null;
+
+    const content = editable
+        ? createFormElement(user)
+        : buildReadOnly(getProfile(user), !isAdmin() && !isOwnProfile);
+
+    el('profile-popup-content').replaceChildren(...(adminBadge ? [adminBadge, content] : [content]));
     updateNormSummary();
     popup.classList.add('popup_opened');
 
@@ -108,6 +130,14 @@ function createFormElement(user) {
 
 // Значения списка (getComboOptions) — в scripts/profile-form.js
 
+
+function buildAdminBadge() {
+    const badge = document.createElement('div');
+    badge.className = 'profile-view__badge';
+    badge.title = 'Полные права на управление графиком';
+    badge.innerHTML = '★ Администратор';
+    return badge;
+}
 
 function buildReadOnly(profile, maskPrivate) {
     const view = document.createElement('div');
