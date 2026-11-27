@@ -211,14 +211,17 @@ export function countSkippedVacations(users) {
 
 // --- Публичная функция выгрузки ---
 
-export async function exportToExcel() {
+export async function exportToExcel(users) {
     const zip = await loadTemplateZip();
 
     const sheetFile = zip.file(SHEET_PATH);
     if (!sheetFile) throw new Error('В шаблоне не найден лист с графиком');
 
+    // Выгружаем либо весь список, либо переданный набор (условия из окна выгрузки)
+    const list = Array.isArray(users) ? users : state.users;
+
     const xml = await sheetFile.async('string');
-    const rows = buildExportRows(state.users);
+    const rows = buildExportRows(list);
     const rowsXml = buildRowsXml(rows);
     const lastRow = Math.max(FIRST_DATA_ROW + rows.length - 1, 3);
 
@@ -232,5 +235,5 @@ export async function exportToExcel() {
 
     downloadBlob(blob, `График отпусков на ${state.year} год.xlsx`);
 
-    return { rows: rows.length, skipped: countSkippedVacations(state.users) };
+    return { rows: rows.length, skipped: countSkippedVacations(list) };
 }

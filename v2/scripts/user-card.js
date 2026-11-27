@@ -201,6 +201,48 @@ function updateProblemsBadge(node, problems) {
     node.classList.toggle('form__problems_warn', !problems.hasError && total > 0);
 }
 
+// Перебор/недобор дней относительно нормы — руководителю видно сразу.
+// Показываем только когда есть что считать (иначе у всех «недобор 28»).
+function getBalance(user) {
+    const profile = getProfile(user);
+
+    if (isParentalLeave(profile)) return null;
+
+    const entitlement = getEntitlement(profile);
+    if (entitlement <= 0) return null;
+
+    const vacations = (user.vacations || [])
+        .filter(vac => vac.startDate && vac.endDate && vac.endDate >= vac.startDate);
+    if (vacations.length === 0) return null;
+
+    const total = vacations.reduce((sum, vac) => sum + getCalendarDays(vac.startDate, vac.endDate), 0);
+    const diff = total - entitlement;
+
+    if (diff === 0) return null;
+    return { diff, entitlement, total };
+}
+
+function updateBalanceBadge(node, balance) {
+    if (!node) return;
+
+    if (!balance) {
+        node.hidden = true;
+        node.textContent = '';
+        node.title = '';
+        node.classList.remove('form__balance_over', 'form__balance_short');
+        return;
+    }
+
+    const over = balance.diff > 0;
+
+    node.hidden = false;
+    node.textContent = over ? `+${balance.diff}` : `−${Math.abs(balance.diff)}`;
+    node.title = `${over ? 'Перебор' : 'Недобор'}: ${over ? formatOverDays(balance.diff) : formatShortDays(Math.abs(balance.diff))}. `
+        + `Норма ${balance.entitlement}, запланировано ${balance.total}.`;
+    node.classList.toggle('form__balance_over', over);
+    node.classList.toggle('form__balance_short', !over);
+}
+
 // Предупреждения внутри блока отпуска
 function renderVacationProblems(vacDiv, user, vac) {
     const hasDates = !!(vac.startDate && vac.endDate);
@@ -306,6 +348,7 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
                 <h2 class="form__username">${escapeHtml(shortName)}</h2>
                 <div class="form__username-tooltip">${escapeHtml(fullName)}</div>
             </div>
+            <span class="form__balance" id="balance-${user.id}" hidden></span>
             <span class="form__problems" id="problems-${user.id}" hidden></span>
             <div class="form__user-actions">
                 <button type="button" class="btn_icon toggle-btn" title="${isHidden ? 'Развернуть' : 'Свернуть'}">${isHidden ? '▼' : '▲'}</button>
@@ -331,10 +374,12 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     // Валидация должна быть видна всегда: и у свёрнутой карточки, и после
     // перерисовки страницы (раньше она жила только в обработчиках ввода дат).
     const problemsEl = wrapper.querySelector('.form__problems');
+    const balanceEl = wrapper.querySelector('.form__balance');
 
     const refreshProblems = () => {
         const problems = collectUserProblems(user);
         updateProblemsBadge(problemsEl, problems);
+        updateBalanceBadge(balanceEl, getBalance(user));
 
         (user.vacations || []).forEach(vac => {
             const node = wrapper.querySelector(`.form__vacation[data-id="${vac.id}"]`);

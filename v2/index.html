@@ -53,6 +53,8 @@
                         <span class="user-chip__sub" id="user-chip-sub"></span>
                     </span>
                 </button>
+                <select id="view-month" class="year-select year-select_view"
+                    title="Показать отпуска за месяц"></select>
                 <select id="year-select" class="year-select"></select>
                 <button type="button" class="btn btn_logout" id="btn-logout">Выйти</button>
             </div>
@@ -86,6 +88,10 @@
             </section>
 
             <section class="content-main">
+                <div class="view-banner" id="view-banner" hidden>
+                    <span class="view-banner__text" id="view-banner-text"></span>
+                    <button type="button" class="view-banner__reset" id="view-banner-reset">Показать весь год</button>
+                </div>
                 <div class="calendar" id="calendar-container"></div>
             </section>
         </main>
@@ -130,6 +136,51 @@
                 </div>
             </div>
             <button type="button" class="popup__close-button" id="profile-popup-close" aria-label="Закрыть"
+                title="Закрыть"></button>
+        </div>
+    </div>
+
+    <!-- Попап выгрузки в Excel -->
+    <div class="popup" id="export-popup">
+        <div class="popup__container popup__container_export">
+            <h2 class="popup__title">Выгрузка в Excel</h2>
+            <div class="popup__content" id="export-popup-content">
+                <div class="export-form">
+                    <div class="export-form__group">
+                        <span class="export-form__label">Кого выгружать</span>
+                        <label class="export-choice">
+                            <input type="radio" name="export-scope" value="all" checked /> Все сотрудники
+                        </label>
+                        <label class="export-choice">
+                            <input type="radio" name="export-scope" value="group" /> Только группу
+                        </label>
+                        <select class="year-select export-form__select" id="export-group" disabled></select>
+                        <label class="export-choice">
+                            <input type="radio" name="export-scope" value="picked" /> Только выбранных
+                        </label>
+                        <div class="export-picked" id="export-picked" hidden>
+                            <input type="text" class="combo__input" id="export-search" placeholder="Поиск по ФИО" />
+                            <div class="export-picked__list" id="export-picked-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="export-form__group">
+                        <span class="export-form__label">Месяцы</span>
+                        <select class="year-select export-form__select" id="export-month"></select>
+                    </div>
+
+                    <label class="export-choice">
+                        <input type="checkbox" id="export-skip-empty" /> Пропускать сотрудников без отпусков
+                    </label>
+                </div>
+
+                <div class="export-summary" id="export-summary"></div>
+            </div>
+            <div class="popup__actions">
+                <button type="button" class="btn btn_small" id="export-cancel">Отмена</button>
+                <button type="button" class="btn btn_add" id="export-run">Выгрузить</button>
+            </div>
+            <button type="button" class="popup__close-button" id="export-close" aria-label="Закрыть"
                 title="Закрыть"></button>
         </div>
     </div>

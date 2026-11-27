@@ -25,15 +25,15 @@ function createDay(dayNumber) {
     return dayDiv;
 }
 
-export function renderCalendar(year) {
+export function renderCalendar(year, fromMonth = 0, toMonth = 11) {
     const calendarContainer = document.querySelector(".calendar");
     if (!calendarContainer) return;
 
     calendarContainer.innerHTML = '';
-    const startDate = new Date(year, 0, 1);
-    const endDate = new Date(year, 11, 31);
+    const startDate = new Date(year, fromMonth, 1);
+    const endDate = new Date(year, toMonth + 1, 0);
 
-    drawCalendar(calendarContainer, startDate, endDate);
+    drawCalendar(calendarContainer, startDate, endDate, year);
 
     fetch(`https://isdayoff.ru/api/getdata?year=${year}`, { signal: AbortSignal.timeout(3000) })
         .then(response => response.text())
@@ -41,8 +41,14 @@ export function renderCalendar(year) {
         .catch(err => console.warn("API isdayoff.ru недоступен.", err));
 }
 
-function drawCalendar(container, startDate, endDate) {
-    let dayIndex = 0;
+// Номер дня в году: по нему строятся id ячеек (dayid_1 … dayid_365).
+// Считаем через UTC, чтобы переход на летнее время не сдвигал нумерацию.
+function dayOfYear(date, year) {
+    const utc = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+    return Math.round((utc - Date.UTC(year, 0, 1)) / 86400000) + 1;
+}
+
+function drawCalendar(container, startDate, endDate, year) {
     let currentMonthDiv = null;
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -67,10 +73,10 @@ function drawCalendar(container, startDate, endDate) {
             dayDiv.classList.add("calendar__day_dayoff");
         }
 
-        dayDiv.id = `dayid_${dayIndex + 1}`;
+        // id остаётся номером дня в году даже когда показаны не все месяцы
+        dayDiv.id = `dayid_${dayOfYear(d, year)}`;
 
         currentMonthDiv.querySelector(".calendar__area").append(dayDiv);
-        dayIndex++;
     }
 
     window.dispatchEvent(new Event("calendarReady"));

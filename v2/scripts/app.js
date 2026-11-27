@@ -11,8 +11,9 @@ import { clearSession, getCurrentUserId, isAdmin, isAuthenticated } from './auth
 import { isGroupHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, toggleGroupCollapsed, getPersonalOrder, setPersonalOrder } from './view-prefs.js';
 import { initProfileModal, openProfileModal } from './profile-modal.js';
 import { updateUserChip, initUserChip } from './user-chip.js';
-import { exportToExcel } from './excel.js';
-import { showNotice, showNoticeLong } from './notice.js';
+import { showNotice } from './notice.js';
+import { MONTH_NAMES, getViewMonth, setViewMonth, filterUsersByViewMonth, getCalendarMonthRange } from './view-month.js';
+import { initExportDialog, openExportDialog } from './export-dialog.js';
 
 const usersContainer = document.getElementById('users-container');
 const updateCalendarVacations = () => renderCalendarVacations(scheduleSave, requestRender, renderUserCard);
@@ -60,8 +61,11 @@ async function ensureUngroupedGroup() {
 function requestRender() {
     usersContainer.replaceChildren();
 
+    // При активном фильтре по месяцу показываем только тех, у кого отпуск в этом месяце
+    const visibleUsers = filterUsersByViewMonth(state.users);
+
     const groupedUsers = {}; const ungroupedUsers = [];
-    state.users.forEach(user => {
+    visibleUsers.forEach(user => {
         if (user.groupId && state.groups.some(g => g.id === user.groupId)) {
             if (!groupedUsers[user.groupId]) groupedUsers[user.groupId] = [];
             groupedUsers[user.groupId].push(user);
@@ -303,6 +307,70 @@ function initUserDragAndDrop() {
     });
 }
 
+// --- Фильтр «показать отпуска за месяц» ---
+
+const viewMonthSelect = document.getElementById('view-month');
+
+if (viewMonthSelect) {
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = 'Весь год';
+    viewMonthSelect.appendChild(allOption);
+
+    MONTH_NAMES.forEach((name, index) => {
+        const monthOption = document.createElement('option');
+        monthOption.value = String(index);
+        monthOption.textContent = name;
+        viewMonthSelect.appendChild(monthOption);
+    });
+
+    viewMonthSelect.value = '';
+    viewMonthSelect.addEventListener('change', (event) => {
+        setViewMonth(event.target.value === '' ? null : Number(event.target.value));
+    });
+}
+
+// Календарь рисуем на выбранный месяц (плюс соседние, если задевают отпуска)
+function renderCalendarForView() {
+    const { from, to } = getCalendarMonthRange(state.users);
+    renderCalendar(state.year, from, to);
+    updateViewBanner();
+}
+
+function updateViewBanner() {
+    const banner = document.getElementById('view-banner');
+    const text = document.getElementById('view-banner-text');
+    if (!banner || !text) return;
+
+    const month = getViewMonth();
+
+    if (month === null) {
+        banner.hidden = true;
+        if (viewMonthSelect) viewMonthSelect.classList.remove('year-select_view-active');
+        return;
+    }
+
+    const shown = filterUsersByViewMonth(state.users).length;
+
+    banner.hidden = false;
+    text.textContent = `Показаны отпуска за ${MONTH_NAMES[month].toLowerCase()}: сотрудников ${shown} из ${state.users.length}`;
+
+    if (viewMonthSelect) {
+        viewMonthSelect.value = String(month);
+        viewMonthSelect.classList.add('year-select_view-active');
+    }
+}
+
+const viewBannerReset = document.getElementById('view-banner-reset');
+if (viewBannerReset) {
+    viewBannerReset.addEventListener('click', () => setViewMonth(null));
+}
+
+stateEvents.addEventListener('viewfilterchange', () => {
+    renderCalendarForView();
+    requestRender();
+});
+
 // --- Инициализация ---
 
 stateEvents.addEventListener('statechange', () => {
@@ -310,7 +378,7 @@ stateEvents.addEventListener('statechange', () => {
     document.getElementById('header-year').textContent = state.year;
     const yearSelect = document.getElementById('year-select');
     if (yearSelect) yearSelect.value = state.year;
-    if (!document.querySelector('.calendar__month')) renderCalendar(state.year);
+    if (!document.querySelector('.calendar__month')) renderCalendarForView();
 
     updateUserChip();
     requestRender();
@@ -374,22 +442,8 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 
 const exportButton = document.getElementById('btn-export-excel');
 if (exportButton) {
-    exportButton.addEventListener('click', async () => {
-        exportButton.disabled = true;
-        showNotice('Готовим файл…');
-        try {
-            const result = await exportToExcel();
-            const skipped = result.skipped > 0
-                ? `. Пропущено периодов с ошибкой в датах: ${result.skipped}`
-                : '';
-            showNoticeLong(`Файл выгружен. Строк: ${result.rows}${skipped}`);
-        } catch (error) {
-            console.error('[excel] Ошибка выгрузки:', error);
-            showNotice(`Не удалось выгрузить: ${error.message}`);
-        } finally {
-            exportButton.disabled = false;
-        }
-    });
+    // Открываем окно выгрузки: кого выгружать, месяцы, пропуск сотрудников без отпусков
+    exportButton.addEventListener('click', () => openExportDialog());
 }
 
 const yearSelect = document.getElementById('year-select');
@@ -439,6 +493,7 @@ if (isAuthenticated()) {
         initUserChip();
         initProfileModal();
         initGroupsUI();
+        initExportDialog();
         initCalendarInteractions();
         initState();
     });

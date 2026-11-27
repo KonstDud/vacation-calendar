@@ -204,6 +204,48 @@
     border-top: 1px solid var(--border-color);
 }
 
+/* --- Баннер фильтра «отпуска за месяц» --- */
+.view-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.view-banner[hidden] {
+    display: none;
+}
+
+.view-banner__reset {
+    background: transparent;
+    border: none;
+    color: #60a5fa;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 4px;
+    white-space: nowrap;
+}
+
+.view-banner__reset:hover {
+    text-decoration: underline;
+}
+
+/* Активный фильтр по месяцу */
+.year-select_view-active {
+    border-color: var(--accent-blue);
+    color: #60a5fa;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
 /* --- Фильтр и управление группами (на будущее) --- */
 .side-groups-controls {
     display: flex;
