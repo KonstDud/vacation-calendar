@@ -408,7 +408,12 @@ function updateViewBanner() {
     if (month === null) {
         if (banner) banner.hidden = true;
         if (chip) chip.hidden = true;
-        if (viewMonthSelect) viewMonthSelect.classList.remove('year-select_view-active');
+
+        // Возвращаем селекту «Весь год»: без этого он оставался на прошлом месяце
+        if (viewMonthSelect) {
+            viewMonthSelect.value = '';
+            viewMonthSelect.classList.remove('year-select_view-active');
+        }
         return;
     }
 
