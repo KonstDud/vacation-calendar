@@ -14,7 +14,7 @@ import { updateUserChip, initUserChip } from './user-chip.js';
 import { showNotice } from './notice.js';
 import { MONTH_NAMES, getViewMonth, setViewMonth, filterUsersByViewMonth, getCalendarMonthRange, isViewMonthActive } from './view-month.js';
 import { initExportDialog, openExportDialog } from './export-dialog.js';
-import { initJournal } from './journal.js';
+import { initJournal } from './journal-window.js';
 import { initResetDialog } from './reset-dialog.js';
 import { logEvent, schedulePrune } from './log.js';
 

@@ -540,11 +540,76 @@
     border-color: #444;
 }
 
-/* --- Окно журнала действий --- */
-.popup__container.popup__container_journal {
-    width: 880px;
-    max-width: 94%;
-    max-height: 88vh;
+/* --- Журнал: плавающее окно (таскается за заголовок, растягивается за угол) --- */
+.journal-window {
+    position: fixed;
+    top: 88px;
+    left: 24px;
+    width: 900px;
+    height: 620px;
+    min-width: 460px;
+    min-height: 220px;
+    max-width: 96vw;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    box-shadow: var(--shadow-hover);
+    z-index: 1200;
+    overflow: hidden;
+    resize: both;
+}
+
+.journal-window[hidden] {
+    display: none;
+}
+
+.journal-window_collapsed {
+    height: auto !important;
+    min-height: 0;
+    resize: none;
+}
+
+.journal-window_collapsed .journal-window__body {
+    display: none;
+}
+
+.journal-window__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-main);
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 14px 14px 0 0;
+    cursor: grab;
+    user-select: none;
+}
+
+.journal-window__bar:active {
+    cursor: grabbing;
+}
+
+.journal-window__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.journal-window__buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.journal-window__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    padding: 0 12px 12px;
 }
 
 .journal-filters {
@@ -577,8 +642,8 @@
 }
 
 .journal-list {
-    min-height: 240px;
-    max-height: 52vh;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -692,6 +757,18 @@
 .journal-status {
     font-size: 12px;
     color: var(--text-secondary);
+}
+
+.journal-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.journal-actions .year-select {
+    font-size: 12px;
+    padding: 5px 26px 5px 8px;
 }
 
 /* --- Окно сброса данных --- */

@@ -209,3 +209,126 @@ export function downloadLogsCsv(items, year) {
 export function schedulePrune(year) {
     setTimeout(() => { pruneLogs(year); }, 3000);
 }
+
+// --- живое обновление ---
+
+// Пока окно журнала открыто, свежие записи приходят сами
+export function subscribeLatestLogs(callback, pageSize = PAGE_SIZE) {
+    const { query, orderBy, limit, onSnapshot } = window.firestore;
+    const colRef = logsCollection(state.year);
+
+    return onSnapshot(query(colRef, orderBy('ts', 'desc'), limit(pageSize)), (snapshot) => {
+        const items = [];
+        snapshot.forEach(item => items.push({ id: item.id, ref: item.ref, ...item.data() }));
+        items.sort((a, b) => b.ts - a.ts);
+        callback(items);
+    }, (error) => {
+        console.warn('[log] не удалось подписаться на журнал:', error);
+    });
+}
+
+// --- ручная очистка (админ) ---
+
+export async function clearLogs(year) {
+    const { query, getDocs, deleteDoc } = window.firestore;
+    const colRef = logsCollection(Number(year) || state.year);
+
+    const snapshot = await getDocs(query(colRef));
+    const tasks = [];
+    snapshot.forEach(item => {
+        if (item.ref) tasks.push(deleteDoc(item.ref));
+    });
+
+    await Promise.all(tasks);
+    return tasks.length;
+}
+
+export async function deleteLogsOlderThan(year, days) {
+    const { query, orderBy, getDocs, deleteDoc } = window.firestore;
+    const colRef = logsCollection(Number(year) || state.year);
+    const boundary = Date.now() - Number(days) * 24 * 60 * 60 * 1000;
+
+    const snapshot = await getDocs(query(colRef, orderBy('ts', 'asc')));
+    const tasks = [];
+    snapshot.forEach(item => {
+        const data = item.data();
+        if (item.ref && data.ts && data.ts < boundary) tasks.push(deleteDoc(item.ref));
+    });
+
+    await Promise.all(tasks);
+    return tasks.length;
+}
+
+// --- форматы выгрузки ---
+
+function downloadBlob(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+export function logsToTxt(items) {
+    return (items || []).map(item => {
+        const head = [
+            formatDateTime(item.ts),
+            LEVEL_LABELS[item.level] || item.level,
+            item.actorName || '—'
+        ].join(' | ');
+
+        const details = item.details
+            ? ' | ' + Object.entries(item.details).map(([key, value]) => `${key}: ${value}`).join(', ')
+            : '';
+
+        return `${head} | ${item.message || item.action} | ${item.action}${details}`;
+    }).join('\r\n');
+}
+
+function logRows(items) {
+    const header = ['Время', 'Уровень', 'Раздел', 'Действие', 'Кто', 'Роль', 'Объект', 'Сообщение'];
+
+    const rows = (items || []).map(item => [
+        formatDateTime(item.ts),
+        LEVEL_LABELS[item.level] || item.level,
+        item.category || '',
+        item.action || '',
+        item.actorName || '',
+        item.actorRole || '',
+        item.targetName || '',
+        item.message || ''
+    ]);
+
+    return [header, ...rows];
+}
+
+async function downloadLogsXlsx(items, year) {
+    const { buildXlsxBlob } = await import('./xlsx-min.js');
+    const blob = await buildXlsxBlob(logRows(items), `Журнал ${year}`, [120, 90, 110, 160, 180, 120, 200, 420]);
+    downloadBlob(blob, `Журнал действий ${year}.xlsx`);
+}
+
+// Формат на выбор: CSV (по умолчанию), TXT, Excel
+export function downloadLogs(items, year, format = 'csv') {
+    if ((items || []).length === 0) return;
+
+    if (format === 'txt') {
+        downloadBlob(new Blob(['\ufeff' + logsToTxt(items)], { type: 'text/plain;charset=utf-8' }),
+            `Журнал действий ${year}.txt`);
+        return;
+    }
+
+    if (format === 'xlsx') {
+        downloadLogsXlsx(items, year).catch(error => {
+            console.warn('[log] не удалось собрать Excel, отдаём CSV:', error);
+            downloadLogsCsv(items, year);
+        });
+        return;
+    }
+
+    downloadLogsCsv(items, year);
+}
+

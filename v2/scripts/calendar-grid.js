@@ -3,6 +3,7 @@ import { state } from './state.js';
 import { countDaysFromYearStart } from './utils.js';
 import { isUserHidden, isGroupHidden } from './view-prefs.js';
 import { canEditUser } from './auth.js';
+import { logEvent } from './log.js';
 
 export function updateCalendarVacations(scheduleSave, requestRender, renderUserCard) {
     clearUserVacationHighlight();
@@ -169,11 +170,24 @@ function openPopover(e, people, scheduleSave, requestRender, renderUserCard) {
 
             const u = state.users.find(u => u.id === person.userId);
             if (!u) return;
+
+            const removedVac = (u.vacations || []).find(v => v.id === person.vacId);
             u.vacations = u.vacations.filter(v => v.id !== person.vacId);
             scheduleSave(u.id, u);
             updateCalendarVacations(scheduleSave, requestRender, renderUserCard);
             const card = document.getElementById(`user-card-${u.id}`);
             if (card) renderUserCard(u, requestRender, updateCalendarVacations);
+
+            logEvent({
+                action: 'vacation.remove',
+                level: 'warn',
+                message: removedVac
+                    ? `Удалил отпуск из календаря: ${removedVac.startDate} — ${removedVac.endDate}`
+                    : 'Удалил отпуск из календаря',
+                targetId: u.id,
+                targetName: u.name,
+                details: { vacationId: person.vacId }
+            });
 
             const currentPopover = document.getElementById('calendar-popover');
             if (currentPopover) currentPopover.remove();

@@ -61,12 +61,27 @@ export async function openProfileModal(userId) {
 
     await loadDictionaries();
 
-    el('profile-popup-title').textContent = editable ? 'Мой профиль' : user.name;
+    el('profile-popup-title').textContent = isOwnProfile ? 'Мой профиль' : (user.name || 'Профиль сотрудника');
     el('profile-popup-content').replaceChildren(
         editable ? createFormElement(user) : buildReadOnly(getProfile(user))
     );
     updateNormSummary();
     popup.classList.add('popup_opened');
+
+    // Чтобы переименовать было быстро: сразу ставим курсор в «Фамилия»,
+    // когда правим чужой профиль или ФИО ещё не заполнено
+    if (editable) {
+        const current = getProfile(user);
+        const incomplete = !current.lastName || !current.firstName;
+
+        if (!isOwnProfile || incomplete) {
+            const lastNameInput = el('profile-popup-content').querySelector('.pf-field[data-field="lastName"] input');
+            if (lastNameInput) {
+                lastNameInput.focus();
+                lastNameInput.select();
+            }
+        }
+    }
 }
 
 export function closeProfileModal() {

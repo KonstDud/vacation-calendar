@@ -200,15 +200,23 @@
         </div>
     </div>
 
-    <!-- Попап журнала действий (только администратор) -->
-    <div class="popup" id="journal-popup">
-        <div class="popup__container popup__container_journal">
-            <h2 class="popup__title">Журнал действий</h2>
+    <!-- Плавающее окно журнала действий (только администратор) -->
+    <div class="journal-window" id="journal-popup" hidden>
+        <div class="journal-window__bar" id="journal-drag">
+            <span class="journal-window__title">Журнал действий</span>
+            <div class="journal-window__buttons">
+                <button type="button" class="btn_icon" id="journal-refresh" title="Обновить">⟳</button>
+                <button type="button" class="btn_icon" id="journal-collapse" title="Свернуть">—</button>
+                <button type="button" class="btn_icon" id="journal-close-x" title="Закрыть">✕</button>
+            </div>
+        </div>
 
+        <div class="journal-window__body" id="journal-body">
             <div class="journal-filters">
-                <select class="year-select" id="journal-level"></select>
-                <select class="year-select" id="journal-category"></select>
-                <select class="year-select" id="journal-actor"></select>
+                <select class="year-select" id="journal-level" title="Уровень"></select>
+                <select class="year-select" id="journal-category" title="Раздел"></select>
+                <select class="year-select" id="journal-action" title="Действие"></select>
+                <select class="year-select" id="journal-actor" title="Автор"></select>
                 <input type="text" class="combo__input" id="journal-search" placeholder="Поиск по тексту" />
                 <button type="button" class="btn btn_small" id="journal-sort">Сначала новые</button>
             </div>
@@ -217,15 +225,23 @@
 
             <div class="journal-footer">
                 <span class="journal-status" id="journal-status"></span>
-                <div class="popup__actions">
+                <div class="journal-actions">
+                    <select class="year-select" id="journal-clean-scope" title="Очистка журнала">
+                        <option value="">Очистить…</option>
+                        <option value="90">Старше 90 дней</option>
+                        <option value="30">Старше 30 дней</option>
+                        <option value="all">Все записи за год</option>
+                    </select>
+                    <select class="year-select" id="journal-format" title="Формат выгрузки">
+                        <option value="csv">CSV</option>
+                        <option value="txt">TXT</option>
+                        <option value="xlsx">Excel</option>
+                    </select>
+                    <button type="button" class="btn btn_small" id="journal-download">Скачать</button>
                     <button type="button" class="btn btn_small" id="journal-load-more">Показать ещё</button>
-                    <button type="button" class="btn btn_small" id="journal-download">Скачать CSV</button>
                     <button type="button" class="btn btn_add" id="journal-close">Закрыть</button>
                 </div>
             </div>
-
-            <button type="button" class="popup__close-button" id="journal-close-x" aria-label="Закрыть"
-                title="Закрыть"></button>
         </div>
     </div>
 

@@ -25,7 +25,7 @@ const CELL_STYLE = { A: 4, B: 5, C: 5, D: 5, E: 5, F: 5, G: 5, H: 15, I: 7, J: 4
 // --- Ленивая загрузка JSZip: нужен только при экспорте/импорте ---
 let jszipPromise = null;
 
-function loadJSZip() {
+export async function loadJSZip() {
     if (window.JSZip) return Promise.resolve(window.JSZip);
     if (!jszipPromise) {
         jszipPromise = new Promise((resolve, reject) => {
