@@ -64,7 +64,7 @@
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 10px;
-    padding: 4px 6px;
+    padding: 4px 6px 4px 12px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     position: relative;
     z-index: 1;
@@ -81,37 +81,41 @@
     gap: 2px;
 }
 
-.form__color {
-    width: 14px;
-    height: 14px;
-    min-width: 14px;
+/* Цвет сотрудника — вертикальная полоска у левого края карточки.
+   Так он не отнимает место у имени (раньше это был кружок в строке). */
+.form__color-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
     border: none;
-    border-radius: 50%;
     padding: 0;
-    cursor: pointer;
+    margin: 0;
     background: transparent;
-    flex-shrink: 0;
-    margin: 0 4px;
+    border-radius: 10px 0 0 10px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    z-index: 3;
 }
 
-.form__color::-webkit-color-swatch-wrapper {
+.form__color-bar::-webkit-color-swatch-wrapper {
     padding: 0;
 }
 
-.form__color::-webkit-color-swatch {
+.form__color-bar::-webkit-color-swatch {
     border: none;
-    border-radius: 50%;
+    border-radius: 10px 0 0 10px;
 }
 
-/* Цвет сотрудника в режиме просмотра (менять нельзя — только видно) */
-.form__color-dot {
-    width: 14px;
-    height: 14px;
-    min-width: 14px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin: 0 4px;
-    display: inline-block;
+.form__color-bar::-moz-color-swatch {
+    border: none;
+    border-radius: 10px 0 0 10px;
+}
+
+.form__color-bar_static {
+    cursor: default;
 }
 
 /* --- Имя и тултип --- */
@@ -127,11 +131,14 @@
     margin: 0;
     font-size: 13px;
     font-weight: 500;
+    line-height: 1.25;
     color: var(--text-primary);
     cursor: pointer;
-    white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     width: 100%;
 }
 
@@ -183,14 +190,44 @@
     opacity: 1;
 }
 
+/* Значок проблем в шапке карточки: виден и когда карточка свёрнута */
+.form__problems {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 5px;
+    margin-right: 2px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(239, 68, 68, 0.18);
+    color: var(--accent-red);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    cursor: help;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.form__problems[hidden] {
+    display: none;
+}
+
+.form__problems_warn {
+    background: rgba(245, 158, 11, 0.18);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.45);
+}
+
 /* Стили для иконок (максимально компактные) */
 .btn_icon {
     background: transparent;
     border: none;
     color: var(--text-muted);
     padding: 0;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     cursor: pointer;
     font-size: 11px;
     border-radius: 4px;
@@ -256,6 +293,13 @@
     border-radius: 6px;
     padding: 4px;
     margin-bottom: 4px;
+    cursor: pointer;
+}
+
+/* Отпуск, который сейчас показан на календаре */
+.form__vacation_active {
+    border-color: var(--accent-blue);
+    box-shadow: inset 0 0 0 1px var(--accent-blue);
 }
 
 .form__vacation-dates {
@@ -309,8 +353,7 @@
 
 /* Свернутая карточка */
 .form__user_hidden {
-    padding: 4px 6px;
-    border-left: 3px solid #fff;
+    padding: 4px 6px 4px 12px;
     position: relative;
     z-index: 2;
     display: flex;
@@ -380,22 +423,22 @@
     margin-left: 4px;
 }
 
-.form__drag-handle {
+/* --- Ручка перетаскивания сотрудника (перестановка карточек в панели) --- */
+.form__drag-handle-user {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
+    width: 16px;
+    flex-shrink: 0;
     color: var(--text-muted);
-    transition: color 0.2s;
+    cursor: grab;
+    opacity: 0.45;
+    transition: opacity 0.2s, color 0.2s;
 }
 
-.form__drag-handle:hover {
+.form__user:hover .form__drag-handle-user {
+    opacity: 1;
     color: var(--text-primary);
-}
-
-.form__vacation-sortable-ghost {
-    opacity: 0.4;
-    background: var(--bg-hover) !important;
 }
 
 .form__user-totals {
@@ -885,6 +928,27 @@ textarea.profile-form__input {
 
 .profile-norm__warn {
     color: #f59e0b;
+}
+
+/* --- Ошибки в полях профиля (формат почты, длины) --- */
+.pf-field__error {
+    display: none;
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--accent-red);
+}
+
+.pf-field_invalid > .pf-field__error {
+    display: block;
+}
+
+.pf-field_invalid .profile-form__input,
+.pf-field_invalid .pf-num__input,
+.pf-field_invalid .combo,
+.pf-field_invalid .combo__input,
+.pf-field_invalid .combo__frame {
+    border-color: var(--accent-red) !important;
 }
 
 /* Профиль в режиме просмотра */

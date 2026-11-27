@@ -207,7 +207,7 @@ function openPopover(e, people, scheduleSave, requestRender, renderUserCard) {
 
 const USER_HOVER_CLASS = 'calendar__day--user-hover';
 
-function isUserShownOnCalendar(user) {
+export function isUserShownOnCalendar(user) {
     if (!user) return false;
     if (isUserHidden(user.id)) return false;
     return !isGroupHidden(user.groupId || 'ungrouped');
@@ -239,5 +239,51 @@ export function clearUserVacationHighlight() {
     document.querySelectorAll(`.${USER_HOVER_CLASS}`).forEach(dayDiv => {
         dayDiv.classList.remove(USER_HOVER_CLASS);
         dayDiv.style.removeProperty('--user-hover-color');
+    });
+}
+
+// --- Подсветка КОНКРЕТНОГО отпуска ---
+// Включается по клику на блок отпуска в карточке. По наведению не делаем:
+// если рядом периоды из разных месяцев, календарь начинал «прыгать».
+
+const PERIOD_CLASS = 'calendar__day--period-hover';
+
+let highlightedPeriod = null; // { userId, vacId, startIndex }
+
+// Подсвечиваем дни периода (без прокрутки — прокрутка только по явному клику)
+export function highlightVacationPeriod(startIndex, endIndex, color, meta = {}) {
+    clearVacationPeriodHighlight();
+
+    for (let i = startIndex; i <= endIndex; i++) {
+        const dayDiv = document.getElementById(`dayid_${i}`);
+        if (!dayDiv) continue;
+        dayDiv.style.setProperty('--period-color', color || '#3b82f6');
+        dayDiv.classList.add(PERIOD_CLASS);
+    }
+
+    highlightedPeriod = { userId: meta.userId || '', vacId: meta.vacId || '', startIndex };
+}
+
+// id выделенного отпуска — чтобы карточка показала его активным
+export function getHighlightedVacationId() {
+    return highlightedPeriod ? highlightedPeriod.vacId : '';
+}
+
+// Прокрутка к периоду — только по клику, чтобы календарь не дёргался сам
+export function scrollToVacationPeriod(startIndex) {
+    const firstDay = document.getElementById(`dayid_${startIndex}`);
+    const month = firstDay && firstDay.closest ? firstDay.closest('.calendar__month') : null;
+
+    if (month && month.scrollIntoView) {
+        month.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+export function clearVacationPeriodHighlight() {
+    highlightedPeriod = null;
+
+    document.querySelectorAll(`.${PERIOD_CLASS}`).forEach(dayDiv => {
+        dayDiv.classList.remove(PERIOD_CLASS);
+        dayDiv.style.removeProperty('--period-color');
     });
 }

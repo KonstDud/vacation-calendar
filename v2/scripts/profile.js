@@ -1,26 +1,33 @@
 // scripts/profile.js — поля профиля сотрудника: единое описание для карточки,
 // регистрации и выгрузки в Excel (колонки A–I, J–L, Q из шаблона).
 
-export const PROFILE_SECTIONS = ['Организация', 'Данные', 'Нормы отпуска', 'Прочее'];
+export const PROFILE_SECTIONS = ['ФИО', 'Организация', 'Данные', 'Нормы отпуска', 'Прочее'];
 
+// --- Поля профиля ---
+// maxLength — чтобы списки и выгрузка в Excel не ломались на «полотне» текста
 export const PROFILE_FIELDS = [
-    { section: 'Организация', key: 'legalEntity', label: 'ЮЛ', placeholder: 'ООО «…»', dict: 'legalEntities' },
-    { section: 'Организация', key: 'city', label: 'Город / подразделение', placeholder: 'Например: Администрация_Москва', dict: 'cities' },
-    { section: 'Организация', key: 'department', label: 'Департамент', placeholder: 'Например: Департамент решений АСТУ', dict: 'departments' },
-    { section: 'Организация', key: 'division', label: 'Отдел', placeholder: 'Например: Отдел аналитики', dict: 'divisions' },
-    { section: 'Организация', key: 'direction', label: 'Направление / Группа', placeholder: 'Можно оставить пустым', dict: 'directions' },
-    { section: 'Организация', key: 'position', label: 'Должность', placeholder: 'Например: Инженер-тестировщик', dict: 'positions' },
+    // ФИО храним по частям, а в шаблон Excel уходит склейка «Фамилия Имя Отчество»
+    { section: 'ФИО', key: 'lastName', label: 'Фамилия', required: true, requiredMessage: 'Укажите фамилию', maxLength: 60, placeholder: 'Например: Дудников' },
+    { section: 'ФИО', key: 'firstName', label: 'Имя', required: true, requiredMessage: 'Укажите имя', maxLength: 60, placeholder: 'Например: Константин' },
+    { section: 'ФИО', key: 'middleName', label: 'Отчество', maxLength: 60, placeholder: 'Если есть' },
 
-    { section: 'Данные', key: 'personnelNumber', label: 'Табельный номер', placeholder: 'Например: 00ЗИ-02200' },
+    { section: 'Организация', key: 'legalEntity', label: 'ЮЛ', placeholder: 'ООО «…»', dict: 'legalEntities', maxLength: 150 },
+    { section: 'Организация', key: 'city', label: 'Город / подразделение', placeholder: 'Например: Администрация_Москва', dict: 'cities', maxLength: 100 },
+    { section: 'Организация', key: 'department', label: 'Департамент', placeholder: 'Например: Департамент решений АСТУ', dict: 'departments', maxLength: 100 },
+    { section: 'Организация', key: 'division', label: 'Отдел', placeholder: 'Например: Отдел аналитики', dict: 'divisions', maxLength: 100 },
+    { section: 'Организация', key: 'direction', label: 'Направление / Группа', placeholder: 'Можно оставить пустым', dict: 'directions', maxLength: 100 },
+    { section: 'Организация', key: 'position', label: 'Должность', placeholder: 'Например: Инженер-тестировщик', dict: 'positions', maxLength: 100 },
+
+    { section: 'Данные', key: 'personnelNumber', label: 'Табельный номер', placeholder: 'Например: 00ЗИ-02200', maxLength: 30 },
     { section: 'Данные', key: 'hireDate', label: 'Дата приёма', type: 'date' },
-    { section: 'Данные', key: 'email', label: 'Почта', type: 'email', placeholder: 'Например: name@company.ru' },
+    { section: 'Данные', key: 'email', label: 'Почта', type: 'email', placeholder: 'Например: name@company.ru', maxLength: 100 },
 
     { section: 'Нормы отпуска', key: 'annualDays', label: 'Основной ежегодный', short: 'Основной', type: 'number', min: 0, max: 365, defaultValue: 28 },
     { section: 'Нормы отпуска', key: 'northernDays', label: 'Северный', short: 'Северный', type: 'number', min: 0, max: 365, defaultValue: 0 },
     { section: 'Нормы отпуска', key: 'irregularDays', label: 'За ненормированный день', short: 'Ненормированный', type: 'number', min: 0, max: 365, defaultValue: 0 },
 
-    { section: 'Прочее', key: 'substitute', label: 'Замещающий', placeholder: 'Начните вводить имя' },
-    { section: 'Прочее', key: 'note', label: 'Примечание', type: 'textarea', wide: true, placeholder: 'Например: в отпуске по уходу за ребенком' }
+    { section: 'Прочее', key: 'substitute', label: 'Замещающий', placeholder: 'Начните вводить имя', maxLength: 120 },
+    { section: 'Прочее', key: 'note', label: 'Примечание', type: 'textarea', wide: true, multiline: true, maxLength: 300, placeholder: 'Например: в отпуске по уходу за ребенком' }
 ];
 
 export const PROFILE_KEYS = PROFILE_FIELDS.map(field => field.key);
@@ -53,7 +60,55 @@ export function getProfile(user) {
         }
     });
 
+    // У сотрудников, заведённых до появления полей ФИО, имя лежит одной строкой
+    // в user.name — разбираем её на части (в том же порядке, что в шаблоне Excel).
+    if (source.lastName === undefined && source.firstName === undefined && user && user.name) {
+        const parts = splitFullName(user.name);
+        profile.lastName = parts.lastName;
+        profile.firstName = parts.firstName;
+        profile.middleName = parts.middleName;
+    }
+
     return profile;
+}
+
+// --- ФИО ---
+
+// Порядок как в шаблоне Excel: «Фамилия Имя Отчество»
+export function composeFullName(profile) {
+    const source = profile || {};
+    return [source.lastName, source.firstName, source.middleName]
+        .map(value => String(value || '').trim())
+        .filter(Boolean)
+        .join(' ');
+}
+
+// «Фамилия Имя» — чтобы помещалось в узкой левой панели
+export function composeShortName(profile, fallbackName) {
+    const source = profile || {};
+    const short = [source.lastName, source.firstName]
+        .map(value => String(value || '').trim())
+        .filter(Boolean)
+        .join(' ');
+
+    return short || shortenFullName(fallbackName);
+}
+
+// Разбираем «Фамилия Имя Отчество» на части (порядок как в шаблоне Excel)
+export function splitFullName(fullName) {
+    const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+
+    return {
+        lastName: parts[0] || '',
+        firstName: parts[1] || '',
+        middleName: parts.slice(2).join(' ')
+    };
+}
+
+// «Фамилия Имя» из одной строки (когда отдельных полей ещё нет)
+export function shortenFullName(fullName) {
+    const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+    return parts.slice(0, 2).join(' ') || String(fullName || '');
 }
 
 // Лимит по ТК: основной + северный + ненормированный
@@ -101,4 +156,69 @@ export function fromTemplateDate(text) {
     const match = String(text).trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
     if (!match) return '';
     return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+// --- Проверка и очистка значений профиля ---
+
+// Достаточно строгая и без ложных срабатываний: имя@домен.зона
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[A-Za-zА-Яа-яЁё0-9]{2,}$/;
+
+// Убираем «мусорные» пробелы, обрезаем по лимиту длины.
+// Применяем перед сохранением, чтобы в базе и в Excel не было «полотна».
+export function sanitizeProfile(profile) {
+    const result = {};
+
+    PROFILE_FIELDS.forEach(field => {
+        const value = (profile || {})[field.key];
+
+        if (field.type === 'number') {
+            const number = Math.round(Number(value) || 0);
+            result[field.key] = Math.min(Math.max(number, field.min || 0), field.max || 365);
+            return;
+        }
+
+        let text = value === undefined || value === null ? '' : String(value);
+
+        // В примечании сохраняем переносы строк, в остальных полях — одна строка
+        text = field.multiline
+            ? text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+            : text.replace(/\s+/g, ' ').trim();
+
+        if (field.maxLength && text.length > field.maxLength) {
+            text = text.slice(0, field.maxLength).trim();
+        }
+
+        result[field.key] = text;
+    });
+
+    return result;
+}
+
+// Возвращает { ключ: сообщение }. Пустой объект — ошибок нет.
+export function validateProfile(profile) {
+    const errors = {};
+
+    PROFILE_FIELDS.forEach(field => {
+        const value = (profile || {})[field.key];
+
+        if (field.required && !String(value || '').trim()) {
+            errors[field.key] = field.requiredMessage || `Заполните поле «${field.label}»`;
+            return;
+        }
+
+        if (field.type === 'email' && value && !EMAIL_RE.test(String(value))) {
+            errors[field.key] = 'Почта в формате name@company.ru';
+            return;
+        }
+
+        if (field.maxLength && String(value || '').length > field.maxLength) {
+            errors[field.key] = `Не больше ${field.maxLength} символов`;
+        }
+    });
+
+    return errors;
+}
+
+export function hasProfileErrors(errors) {
+    return Object.keys(errors || {}).length > 0;
 }

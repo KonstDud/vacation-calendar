@@ -225,6 +225,13 @@
     outline-offset: -2px;
 }
 
+/* Подсветка конкретного периода (наведение на блок отпуска в карточке).
+   Отличается от подсветки «все отпуска»: заливка + внутренняя рамка цветом. */
+.calendar__day--period-hover {
+    background: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: inset 0 0 0 2px var(--period-color, var(--accent-blue));
+}
+
 .calendar__day--highlighted {
     background: rgba(59, 130, 246, 0.3) !important;
     border: 1px solid var(--accent-blue) !important;

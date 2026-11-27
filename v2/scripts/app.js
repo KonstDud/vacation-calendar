@@ -9,8 +9,10 @@ import { updateCalendarVacations as renderCalendarVacations } from './calendar-g
 import { getIconEye, getIconEyeOff } from './utils.js';
 import { clearSession, getCurrentUserId, isAdmin, isAuthenticated } from './auth.js';
 import { isGroupHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, toggleGroupCollapsed, getPersonalOrder, setPersonalOrder } from './view-prefs.js';
-import { initProfileModal } from './profile-modal.js';
+import { initProfileModal, openProfileModal } from './profile-modal.js';
 import { updateUserChip, initUserChip } from './user-chip.js';
+import { exportToExcel } from './excel.js';
+import { showNotice, showNoticeLong } from './notice.js';
 
 const usersContainer = document.getElementById('users-container');
 const updateCalendarVacations = () => renderCalendarVacations(scheduleSave, requestRender, renderUserCard);
@@ -38,24 +40,6 @@ function collectUserOrder() {
         });
     });
     return ids;
-}
-
-// Короткая всплывающая подсказка
-let hintTimeout = null;
-function showHint(text) {
-    let node = document.getElementById('app-hint');
-    if (!node) {
-        node = document.createElement('div');
-        node.id = 'app-hint';
-        node.className = 'app-hint';
-        document.body.appendChild(node);
-    }
-
-    node.textContent = text;
-    node.classList.add('app-hint_visible');
-
-    clearTimeout(hintTimeout);
-    hintTimeout = setTimeout(() => node.classList.remove('app-hint_visible'), 2600);
 }
 
 async function ensureUngroupedGroup() {
@@ -277,7 +261,7 @@ function initUserDragAndDrop() {
                     const toGroupId = evt.to ? (evt.to.dataset.groupId || '') : '';
 
                     if (draggedId !== getCurrentUserId() && fromGroupId !== toGroupId) {
-                        showHint('Перенести сотрудника в другую группу может только администратор. Себя — можно.');
+                        showNotice('Перенести сотрудника в другую группу может только администратор. Себя — можно.');
                         return false;
                     }
                 }
@@ -334,13 +318,28 @@ stateEvents.addEventListener('statechange', () => {
 
 window.addEventListener('calendarReady', () => updateCalendarVacations());
 
+// Имя по умолчанию не должно повторяться: иначе сотрудников не различить,
+// а вход «Кто вы?» склеит одинаковые имена в одного человека.
+function buildNewUserName() {
+    const base = 'Новый сотрудник';
+    const taken = new Set(state.users.map(user => String(user.name || '').trim().toLowerCase()));
+
+    if (!taken.has(base.toLowerCase())) return base;
+
+    let index = 2;
+    while (taken.has(`${base} ${index}`.toLowerCase())) index += 1;
+    return `${base} ${index}`;
+}
+
 document.getElementById('btn-add-user').addEventListener('click', async () => {
     const colRef = window.firestore.collection(window.db, "vacationData_v2", String(state.year), "users");
     const newDocRef = window.firestore.doc(colRef);
 
     const newUser = {
         id: newDocRef.id,
-        name: 'Новый сотрудник',
+        name: buildNewUserName(),
+        // Пустые поля ФИО: заполняются сразу в открывшемся профиле
+        profile: { lastName: '', firstName: '', middleName: '' },
         color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
         vacations: [],
         order: Date.now(),
@@ -363,12 +362,35 @@ document.getElementById('btn-add-user').addEventListener('click', async () => {
     state.users = [...state.users, newUser];
     requestRender();
     window.firestore.setDoc(newDocRef, newUser).catch(console.error);
+
+    // Сразу открываем профиль: без ФИО сотрудник в графике бесполезен
+    openProfileModal(newUser.id);
 });
 
 document.getElementById('btn-logout').addEventListener('click', () => {
     clearSession();
     window.location.href = 'login.html';
 });
+
+const exportButton = document.getElementById('btn-export-excel');
+if (exportButton) {
+    exportButton.addEventListener('click', async () => {
+        exportButton.disabled = true;
+        showNotice('Готовим файл…');
+        try {
+            const result = await exportToExcel();
+            const skipped = result.skipped > 0
+                ? `. Пропущено периодов с ошибкой в датах: ${result.skipped}`
+                : '';
+            showNoticeLong(`Файл выгружен. Строк: ${result.rows}${skipped}`);
+        } catch (error) {
+            console.error('[excel] Ошибка выгрузки:', error);
+            showNotice(`Не удалось выгрузить: ${error.message}`);
+        } finally {
+            exportButton.disabled = false;
+        }
+    });
+}
 
 const yearSelect = document.getElementById('year-select');
 if (yearSelect) {
@@ -404,8 +426,9 @@ function applyAccessRules() {
         if (node) node.style.display = 'none';
     });
 
-    const sideFooter = document.querySelector('.side-footer');
-    if (sideFooter) sideFooter.style.display = 'none';
+    // «Сбросить всё» — только администратор. Выгрузка в Excel доступна всем.
+    const resetButton = document.getElementById('btn-reset');
+    if (resetButton) resetButton.style.display = 'none';
 }
 
 applyAccessRules();

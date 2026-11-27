@@ -66,26 +66,45 @@ export async function collectPeopleFromNearbyYears(preferred) {
     const main = byYear.reduce((best, item) => (!best || item.users.length > best.users.length ? item : best), null);
     const mainYear = main ? main.year : preferred;
 
-    // сначала люди основного года, затем те, кто есть только в других годах
+    // Сначала весь основной год: это разные документы, поэтому однофамильцев
+    // показываем отдельно (раньше они «склеивались» в одного человека).
     const people = [];
-    const seen = new Set();
-    const addUser = (user, year) => {
-        const key = normalizePersonName(user.name) || user.id;
-        if (seen.has(key)) return;
-        seen.add(key);
-        people.push({ ...user, year });
-    };
+    const takenKeys = new Set();
 
-    byYear.forEach(item => {
-        if (item.year === mainYear) item.users.forEach(user => addUser(user, item.year));
-    });
-    byYear.forEach(item => {
-        if (item.year !== mainYear) item.users.forEach(user => addUser(user, item.year));
-    });
+    byYear
+        .filter(item => item.year === mainYear)
+        .forEach(item => item.users.forEach(user => {
+            people.push({ ...user, year: item.year });
+            personKeys(user).forEach(key => takenKeys.add(key));
+        }));
+
+    // Затем те, кого нет в основном году
+    byYear
+        .filter(item => item.year !== mainYear)
+        .forEach(item => item.users.forEach(user => {
+            const keys = personKeys(user);
+            if (keys.some(key => takenKeys.has(key))) return;
+            keys.forEach(key => takenKeys.add(key));
+            people.push({ ...user, year: item.year });
+        }));
 
     people.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru'));
 
     return { people, mainYear };
+}
+
+// Людей сравниваем по табельному номеру, а если его нет — по ФИО.
+// Ключей может быть два: иначе связка «в одном году номер заполнен, в другом нет»
+// разъедется и человек задвоится.
+export function personKeys(user) {
+    const keys = [];
+    const personnelNumber = String(((user && user.profile) || {}).personnelNumber || '').trim().toLowerCase();
+    if (personnelNumber) keys.push(`pn:${personnelNumber}`);
+
+    const name = normalizePersonName(user && user.name);
+    if (name) keys.push(`name:${name}`);
+
+    return keys;
 }
 
 export async function detectMainYear(preferred) {
@@ -190,6 +209,20 @@ async function startSubscription(year) {
         snapshot.forEach(doc => {
             groups.push({ id: doc.id, ...doc.data() });
         });
+
+        // «Без группы» должна существовать всегда. Иначе сотрудники без группы
+        // (или с уже удалённой группой) просто исчезли бы из панели и календаря.
+        if (!groups.some(group => group.id === 'ungrouped')) {
+            groups.push({
+                id: 'ungrouped',
+                name: 'Без группы',
+                color: '#555555',
+                isVisible: true,
+                showIfEmpty: true,
+                isCollapsed: false,
+                order: 9999
+            });
+        }
 
         groups.sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
 

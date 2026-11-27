@@ -50,6 +50,29 @@ export function createProfileForm(profile, { users = [], currentUserId = '', onC
             .forEach(field => element.appendChild(buildField(field, profile[field.key], context)));
     });
 
+    // Снимаем пометку об ошибке, как только пользователь начал править поле
+    element.addEventListener('input', (event) => {
+        const fieldNode = event.target.closest && event.target.closest('.pf-field');
+        if (!fieldNode) return;
+        fieldNode.classList.remove('pf-field_invalid');
+        const errorNode = fieldNode.querySelector('.pf-field__error');
+        if (errorNode) errorNode.textContent = '';
+    });
+
+    const showErrors = (errors) => {
+        element.querySelectorAll('.pf-field').forEach(fieldNode => {
+            const message = (errors || {})[fieldNode.dataset.field];
+            fieldNode.classList.toggle('pf-field_invalid', !!message);
+            const errorNode = fieldNode.querySelector('.pf-field__error');
+            if (errorNode) errorNode.textContent = message || '';
+        });
+
+        const firstInvalid = element.querySelector('.pf-field_invalid');
+        if (firstInvalid && firstInvalid.scrollIntoView) {
+            firstInvalid.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    };
+
     return {
         element,
         collect: () => {
@@ -59,11 +82,24 @@ export function createProfileForm(profile, { users = [], currentUserId = '', onC
             });
             return result;
         },
+        showErrors,
         destroy: () => controls.forEach(control => control.destroy && control.destroy())
     };
 }
 
+// Обёртка: помечает поле его ключом (для показа ошибок) и добавляет строку ошибки
 function buildField(field, value, context) {
+    const wrapper = buildFieldContent(field, value, context);
+    wrapper.dataset.field = field.key;
+
+    const errorNode = document.createElement('div');
+    errorNode.className = 'pf-field__error';
+    wrapper.appendChild(errorNode);
+
+    return wrapper;
+}
+
+function buildFieldContent(field, value, context) {
     const { users, currentUserId, onChange, controls } = context;
     const wrapper = document.createElement('div');
     wrapper.className = `pf-field${field.wide || field.type === 'textarea' ? ' pf-field_wide' : ''}`;
@@ -93,7 +129,7 @@ function buildField(field, value, context) {
     // Имя поля: лежит внутри, поднимается наверх при фокусе или заполнении
     const label = document.createElement('span');
     label.className = 'pf-field__label';
-    label.textContent = field.label;
+    label.textContent = field.required ? `${field.label} *` : field.label;
 
     if (field.type === 'date') wrapper.classList.add('pf-field_date');
 
@@ -112,6 +148,8 @@ function buildField(field, value, context) {
         wrapper.appendChild(label);
 
         const comboInput = combo.element.querySelector('.combo__input');
+        if (field.maxLength && comboInput) comboInput.maxLength = field.maxLength;
+
         attachOverflowTip(
             wrapper,
             () => combo.getValue(),
@@ -126,6 +164,7 @@ function buildField(field, value, context) {
         const textarea = document.createElement('textarea');
         textarea.className = 'profile-form__input';
         textarea.rows = 2;
+        if (field.maxLength) textarea.maxLength = field.maxLength;
         textarea.placeholder = field.placeholder || ' ';
         textarea.value = String(value || '');
         textarea.addEventListener('input', () => onChange && onChange());
@@ -138,6 +177,7 @@ function buildField(field, value, context) {
     const input = document.createElement('input');
     input.className = 'profile-form__input';
     input.type = field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : 'text';
+    if (field.maxLength) input.maxLength = field.maxLength;
     input.placeholder = field.placeholder || ' ';
     input.value = value === undefined || value === null ? '' : String(value);
     input.addEventListener('input', () => onChange && onChange());

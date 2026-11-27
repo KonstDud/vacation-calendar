@@ -2,7 +2,7 @@
 
 import { state, stateEvents } from './state.js';
 import { loadDictionaries } from './dictionaries.js';
-import { PROFILE_FIELDS, PROFILE_SECTIONS, getProfile, getEntitlement, isParentalLeave, toTemplateDate } from './profile.js';
+import { PROFILE_FIELDS, PROFILE_SECTIONS, getProfile, getEntitlement, isParentalLeave, toTemplateDate, sanitizeProfile, validateProfile, hasProfileErrors, composeFullName } from './profile.js';
 import { createProfileForm } from './profile-form.js';
 import { canEditUser, getCurrentUserId, clearSession, isAdmin } from './auth.js';
 
@@ -144,16 +144,28 @@ async function saveProfile() {
     if (!currentUser || !editable) return;
 
     const button = el('profile-popup-save');
-    const profile = collectProfile();
+    // Чистим и проверяем ДО сохранения: почта и длины полей уедут и в Excel
+    const profile = sanitizeProfile(collectProfile());
+    const errors = validateProfile(profile);
+
+    if (hasProfileErrors(errors)) {
+        if (profileForm && profileForm.showErrors) profileForm.showErrors(errors);
+        el('profile-norm').innerHTML = '<span class="profile-norm__warn">Проверьте выделенные поля</span>';
+        return;
+    }
 
     button.disabled = true;
     button.textContent = 'Сохранение…';
 
     try {
         const ref = window.firestore.doc(window.db, 'vacationData_v2', String(state.year), 'users', currentUser.id);
-        await window.firestore.setDoc(ref, { profile }, { merge: true });
+
+        // Имя сотрудника всегда «Фамилия Имя Отчество» — как в шаблоне Excel
+        const fullName = composeFullName(profile) || currentUser.name;
+        await window.firestore.setDoc(ref, { profile, name: fullName }, { merge: true });
 
         currentUser.profile = profile;
+        currentUser.name = fullName;
         stateEvents.dispatchEvent(new Event('statechange'));
         closeProfileModal();
     } catch (error) {

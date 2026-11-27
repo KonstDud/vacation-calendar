@@ -13,7 +13,7 @@ import {
 import { setupUserCombobox, escapeHtml } from './user-combobox.js';
 import { createProfileForm } from './profile-form.js';
 import { loadDictionaries } from './dictionaries.js';
-import { getProfile, getEntitlement, isParentalLeave } from './profile.js';
+import { getProfile, getEntitlement, isParentalLeave, sanitizeProfile, validateProfile, hasProfileErrors } from './profile.js';
 import { collectPeopleFromNearbyYears } from './state.js';
 
 const el = (id) => document.getElementById(id);
@@ -462,11 +462,20 @@ el('reg-profile-save').addEventListener('click', async () => {
     const errorNode = el('reg-profile-error');
     showError(errorNode, '');
 
+    // Чистим и проверяем до входа: почта и длины полей уедут ещё и в Excel
+    const profile = sanitizeProfile(regProfileForm.collect());
+    const errors = validateProfile(profile);
+
+    if (hasProfileErrors(errors)) {
+        if (regProfileForm.showErrors) regProfileForm.showErrors(errors);
+        showError(errorNode, 'Проверьте выделенные поля');
+        return;
+    }
+
     button.disabled = true;
     button.textContent = 'Сохранение…';
 
     try {
-        const profile = regProfileForm.collect();
         const ref = window.firestore.doc(window.db, 'vacationData_v2', String(currentYear), 'users', pendingUser.id);
         await window.firestore.setDoc(ref, { profile }, { merge: true });
 
