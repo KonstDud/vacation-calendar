@@ -5,6 +5,7 @@ import { loadDictionaries } from './dictionaries.js';
 import { PROFILE_FIELDS, PROFILE_SECTIONS, getProfile, getEntitlement, isParentalLeave, toTemplateDate, sanitizeProfile, validateProfile, hasProfileErrors, composeFullName } from './profile.js';
 import { createProfileForm } from './profile-form.js';
 import { canEditUser, getCurrentUserId, clearSession, isAdmin } from './auth.js';
+import { logEvent } from './log.js';
 
 const el = (id) => document.getElementById(id);
 const escapeHtml = (value) => String(value ?? '')
@@ -168,6 +169,14 @@ async function saveProfile() {
         currentUser.name = fullName;
         stateEvents.dispatchEvent(new Event('statechange'));
         closeProfileModal();
+
+        logEvent({
+            action: 'user.profile',
+            message: `Обновил профиль «${fullName}»`,
+            targetId: currentUser.id,
+            targetName: fullName,
+            details: { position: profile.position, personnelNumber: profile.personnelNumber }
+        });
     } catch (error) {
         console.error('[profile] Ошибка сохранения:', error);
     } finally {
@@ -201,6 +210,13 @@ async function deleteProfile() {
         await window.firestore.deleteDoc(window.firestore.doc(window.db, 'access', userId));
 
         if (isOwnProfile) {
+            logEvent({
+                action: 'user.delete',
+                level: 'warn',
+                message: `Удалил свой профиль «${currentUser.name}»`,
+                targetId: userId,
+                targetName: currentUser.name
+            });
             closeProfileModal();
             clearSession();
             window.location.href = 'login.html';

@@ -10,6 +10,11 @@ import {
     deleteDoc,
     onSnapshot,
     query,
+    orderBy,          // __ для журнала: сортировка
+    limit,            // __ для журнала: страницы и чистка
+    startAfter,       // __ для журнала: постраничная загрузка
+    where,            // __ для журнала: фильтры
+    getCountFromServer, // __ для журнала: контроль объёма
     persistentLocalCache // <--- НОВЫЙ КЭШ
 } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
@@ -39,8 +44,16 @@ window.firestore = {
     deleteDoc,
     onSnapshot,
     query,
+    orderBy,
+    limit,
+    startAfter,
+    where,
+    getCountFromServer,
 };
 
 window.firebaseReady = Promise.resolve(db);
 
-export { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query };
+export {
+    db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot,
+    query, orderBy, limit, startAfter, where, getCountFromServer
+};

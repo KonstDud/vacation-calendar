@@ -15,6 +15,7 @@ import { createProfileForm } from './profile-form.js';
 import { loadDictionaries } from './dictionaries.js';
 import { getProfile, getEntitlement, isParentalLeave, sanitizeProfile, validateProfile, hasProfileErrors } from './profile.js';
 import { collectPeopleFromNearbyYears } from './state.js';
+import { logEvent } from './log.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -112,6 +113,15 @@ function finishLogin(userId, name, role, year) {
     // запоминаем год записи, чтобы приложение открыло тот же год
     if (year) localStorage.setItem('vacationYear', String(year));
     saveSession({ userId, name, role });
+
+    logEvent({
+        action: 'auth.login',
+        message: `Вход: ${name} (${role === ROLES.ADMIN ? 'администратор' : 'сотрудник'})`,
+        targetId: userId,
+        targetName: name,
+        year
+    });
+
     window.location.href = 'index.html';
 }
 
@@ -172,6 +182,11 @@ el('team-submit').addEventListener('click', async () => {
 
         if (!isValid) {
             showError(errorNode, 'Неверный пароль');
+            logEvent({
+                action: 'auth.login_failed',
+                level: 'warn',
+                message: 'Неверный пароль команды'
+            });
             return;
         }
 
@@ -247,6 +262,13 @@ el('user-submit').addEventListener('click', async () => {
         const isValid = await verifyPassword(password, selectedAccess);
         if (!isValid) {
             showError(errorNode, 'Неверный пароль');
+            logEvent({
+                action: 'auth.login_failed',
+                level: 'warn',
+                message: `Неверный пароль: ${selectedUser.name}`,
+                targetId: selectedUser.id,
+                targetName: selectedUser.name
+            });
             return;
         }
 
@@ -294,6 +316,11 @@ el('admin-submit').addEventListener('click', async () => {
         const isValid = await verifyAdminPassword(password);
         if (!isValid) {
             showError(errorNode, 'Неверный пароль');
+            logEvent({
+                action: 'auth.login_failed',
+                level: 'warn',
+                message: 'Неверный пароль администратора'
+            });
             return;
         }
         finishLogin('', 'Администратор', ROLES.ADMIN, currentYear);

@@ -524,3 +524,193 @@
     color: var(--text-secondary);
     padding-top: 4px;
 }
+
+/* --- Кнопка журнала в шапке --- */
+.btn_icon.btn_journal {
+    width: 34px;
+    height: 32px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-secondary);
+}
+
+.btn_icon.btn_journal:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+    border-color: #444;
+}
+
+/* --- Окно журнала действий --- */
+.popup__container.popup__container_journal {
+    width: 880px;
+    max-width: 94%;
+    max-height: 88vh;
+}
+
+.journal-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 0;
+}
+
+.journal-filters .year-select {
+    font-size: 13px;
+    padding: 6px 30px 6px 10px;
+}
+
+#journal-search {
+    flex: 1;
+    min-width: 150px;
+    padding: 7px 10px;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+}
+
+#journal-search:focus {
+    border-color: var(--accent-blue);
+}
+
+.journal-list {
+    min-height: 240px;
+    max-height: 52vh;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-main);
+    padding: 6px;
+}
+
+.journal-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.journal-row {
+    display: grid;
+    grid-template-columns: 132px 72px 150px 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 7px 8px;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    font-size: 12px;
+}
+
+.journal-row + .journal-row {
+    margin-top: 2px;
+}
+
+.journal-row:hover {
+    background: var(--bg-hover);
+}
+
+.journal-row_info {
+    border-left-color: rgba(59, 130, 246, 0.5);
+}
+
+.journal-row_warn {
+    border-left-color: #f59e0b;
+}
+
+.journal-row_error {
+    border-left-color: var(--accent-red);
+}
+
+.journal-row__time {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.journal-row__who {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.journal-row__level {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.journal-row__level_info {
+    background: rgba(59, 130, 246, 0.16);
+    color: #60a5fa;
+}
+
+.journal-row__level_warn {
+    background: rgba(245, 158, 11, 0.18);
+    color: #f59e0b;
+}
+
+.journal-row__level_error {
+    background: rgba(239, 68, 68, 0.18);
+    color: var(--accent-red);
+}
+
+.journal-row__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.journal-row__message {
+    color: var(--text-primary);
+}
+
+.journal-row__meta {
+    color: var(--text-muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.journal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 12px;
+}
+
+.journal-status {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* --- Окно сброса данных --- */
+.popup__container.popup__container_reset {
+    width: 430px;
+    max-width: 92%;
+}
+
+.reset-summary {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.reset-summary b {
+    color: var(--text-primary);
+}
+
+.export-choice_danger {
+    color: var(--accent-red);
+}

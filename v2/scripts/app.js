@@ -14,6 +14,9 @@ import { updateUserChip, initUserChip } from './user-chip.js';
 import { showNotice } from './notice.js';
 import { MONTH_NAMES, getViewMonth, setViewMonth, filterUsersByViewMonth, getCalendarMonthRange, isViewMonthActive } from './view-month.js';
 import { initExportDialog, openExportDialog } from './export-dialog.js';
+import { initJournal } from './journal.js';
+import { initResetDialog } from './reset-dialog.js';
+import { logEvent, schedulePrune } from './log.js';
 
 const usersContainer = document.getElementById('users-container');
 const updateCalendarVacations = () => renderCalendarVacations(scheduleSave, requestRender, renderUserCard);
@@ -394,6 +397,14 @@ stateEvents.addEventListener('viewfilterchange', () => {
     requestRender();
 });
 
+// Журнал не должен разрастаться: подрезаем старые записи один раз за сессию
+let pruneScheduled = false;
+stateEvents.addEventListener('statechange', () => {
+    if (pruneScheduled || !isAdmin()) return;
+    pruneScheduled = true;
+    schedulePrune(state.year);
+});
+
 // --- Инициализация ---
 
 stateEvents.addEventListener('statechange', () => {
@@ -454,11 +465,19 @@ document.getElementById('btn-add-user').addEventListener('click', async () => {
     requestRender();
     window.firestore.setDoc(newDocRef, newUser).catch(console.error);
 
+    logEvent({
+        action: 'user.add',
+        message: `Добавил сотрудника «${newUser.name}»`,
+        targetId: newUser.id,
+        targetName: newUser.name
+    });
+
     // Сразу открываем профиль: без ФИО сотрудник в графике бесполезен
     openProfileModal(newUser.id);
 });
 
-document.getElementById('btn-logout').addEventListener('click', () => {
+document.getElementById('btn-logout').addEventListener('click', async () => {
+    logEvent({ action: 'auth.logout', message: 'Вышел из системы' });
     clearSession();
     window.location.href = 'login.html';
 });
@@ -506,6 +525,10 @@ function applyAccessRules() {
     // «Сбросить всё» — только администратор. Выгрузка в Excel доступна всем.
     const resetButton = document.getElementById('btn-reset');
     if (resetButton) resetButton.style.display = 'none';
+
+    // Журнал действий — тоже только администратор
+    const journalButton = document.getElementById('btn-journal');
+    if (journalButton) journalButton.style.display = 'none';
 }
 
 applyAccessRules();
@@ -517,6 +540,8 @@ if (isAuthenticated()) {
         initProfileModal();
         initGroupsUI();
         initExportDialog();
+        initJournal();
+        initResetDialog();
         initCalendarInteractions();
         initState();
     });

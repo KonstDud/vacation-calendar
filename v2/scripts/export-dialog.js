@@ -5,6 +5,7 @@ import { state } from './state.js';
 import { exportToExcel, buildExportRows, countSkippedVacations } from './excel.js';
 import { MONTH_NAMES, getViewMonth, vacationTouchesMonth } from './view-month.js';
 import { showNoticeLong } from './notice.js';
+import { logEvent } from './log.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -187,6 +188,13 @@ async function runExport() {
         const result = await exportToExcel(users);
         const skipped = result.skipped > 0 ? `. Пропущено периодов с ошибкой в датах: ${result.skipped}` : '';
         showNoticeLong(`Файл выгружен. Строк: ${result.rows}${skipped}`);
+
+        logEvent({
+            action: 'data.export',
+            message: `Выгрузил в Excel: сотрудников ${users.length}, строк ${result.rows}`,
+            details: { users: users.length, rows: result.rows, skipped: result.skipped }
+        });
+
         closeExportDialog();
     } catch (error) {
         console.error('[export] Ошибка выгрузки:', error);

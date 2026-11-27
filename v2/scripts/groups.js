@@ -2,6 +2,7 @@
 import { state, stateEvents, addGroup, updateGroup, deleteGroup } from './state.js';
 import { getIconEdit, getIconTrash } from './utils.js';
 import { isAdmin } from './auth.js';
+import { logEvent } from './log.js';
 import { isGroupHidden, setGroupHidden, isGroupCollapsed, setGroupCollapsed } from './view-prefs.js';
 
 export function initGroupsUI() {
@@ -79,8 +80,21 @@ export function initGroupsUI() {
             try {
                 if (isEditing) {
                     await updateGroup(editingGroupId, { name, color, showIfEmpty });
+                    logEvent({
+                        action: 'group.update',
+                        message: `Изменил группу «${name}»`,
+                        targetId: editingGroupId,
+                        targetName: name,
+                        details: { color, showIfEmpty: showIfEmpty ? 'да' : 'нет' }
+                    });
                 } else {
                     await addGroup(name, color, showIfEmpty);
+                    logEvent({
+                        action: 'group.add',
+                        message: `Создал группу «${name}»`,
+                        targetName: name,
+                        details: { color }
+                    });
                 }
                 editingGroupId = null;
                 renderGroupsList();
@@ -170,7 +184,16 @@ export function initGroupsUI() {
             if (admin) {
                 item.querySelector('.btn-edit-group').addEventListener('click', () => { editingGroupId = group.id; renderForm(); });
                 item.querySelector('.btn-delete-group').addEventListener('click', async () => {
-                    if (confirm(`Удалить группу "${group.name}"?`)) await deleteGroup(group.id);
+                    if (!confirm(`Удалить группу "${group.name}"?`)) return;
+
+                    await deleteGroup(group.id);
+                    logEvent({
+                        action: 'group.delete',
+                        level: 'warn',
+                        message: `Удалил группу «${group.name}»`,
+                        targetId: group.id,
+                        targetName: group.name
+                    });
                 });
             }
 
@@ -285,6 +308,16 @@ export function initGroupsUI() {
 
                 const skipped = checked.length - toMove.length;
                 if (skipped > 0) alert(`Переназначено: ${toMove.length}. Уже были в группе: ${skipped}.`);
+
+                const targetName = state.groups.find(g => g.id === targetGroupId);
+                logEvent({
+                    action: 'group.mass',
+                    level: 'warn',
+                    message: `Переназначил сотрудников (${toMove.length}) в группу «${targetName ? targetName.name : targetGroupId}»`,
+                    targetId: targetGroupId,
+                    targetName: targetName ? targetName.name : '',
+                    details: { moved: toMove.length, skipped }
+                });
 
                 renderGroupsList();
             } catch (err) {

@@ -7,6 +7,7 @@ import { isUserHidden, isGroupHidden, toggleUserHidden } from './view-prefs.js';
 import { openProfileModal } from './profile-modal.js';
 import { updateUserChip } from './user-chip.js';
 import { getProfile, getEntitlement, isParentalLeave, formatOverDays, formatShortDays, composeShortName } from './profile.js';
+import { logEvent } from './log.js';
 
 // Норма ТК по умолчанию — 28 календарных дней; одна из частей — не менее 14
 const MIN_LEAVE_PART = 14;
@@ -416,11 +417,19 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     if (colorInput) {
         colorInput.addEventListener('change', (e) => {
             e.stopPropagation();
+            const previousColor = user.color;
             user.color = e.target.value;
             scheduleSave(user.id, user, requestRender);
             renderUserCard(user, requestRender, updateCalendarVacations);
             updateCalendarVacations();
             updateUserChip();
+
+            logEvent({
+                action: 'user.color',
+                message: `Изменил цвет: ${previousColor} → ${user.color}`,
+                targetId: user.id,
+                targetName: user.name
+            });
         });
     }
 
@@ -447,6 +456,15 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
                 window.firestore.deleteDoc(window.firestore.doc(window.db, 'access', user.id)).catch(console.error);
                 requestRender();
                 updateCalendarVacations();
+
+                logEvent({
+                    action: 'user.delete',
+                    level: 'warn',
+                    message: `Удалил сотрудника «${user.name}»`,
+                    targetId: user.id,
+                    targetName: user.name,
+                    details: { vacations: (user.vacations || []).length }
+                });
             }
         });
     }
@@ -553,7 +571,24 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
             // Блок встаёт на место по дате, но только когда пользователь закончил:
             // увёл курсор из этого отпуска или закрыл нативный календарь.
             inputs.forEach(input => {
-                input.addEventListener('change', () => scheduleReorder(vacList, user, vacDiv));
+                // Запоминаем значение на входе в поле, чтобы записать в журнал только реальные правки
+                input.addEventListener('focus', () => { input.dataset.prevValue = input.value; });
+
+                input.addEventListener('change', () => {
+                    scheduleReorder(vacList, user, vacDiv);
+
+                    if (input.dataset.prevValue && input.dataset.prevValue !== input.value) {
+                        logEvent({
+                            action: 'vacation.update',
+                            message: `Изменил период: ${input.dataset.prevValue} → ${input.value}`,
+                            targetId: user.id,
+                            targetName: user.name,
+                            details: { vacationId: vac.id }
+                        });
+                        input.dataset.prevValue = input.value;
+                    }
+                });
+
                 input.addEventListener('blur', () => scheduleReorder(vacList, user, vacDiv));
             });
 
@@ -564,6 +599,15 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
                     scheduleSave(user.id, user, requestRender);
                     renderUserCard(user, requestRender, updateCalendarVacations);
                     updateCalendarVacations();
+
+                    logEvent({
+                        action: 'vacation.remove',
+                        level: 'warn',
+                        message: `Удалил отпуск ${vac.startDate} — ${vac.endDate}`,
+                        targetId: user.id,
+                        targetName: user.name,
+                        details: { vacationId: vac.id }
+                    });
                 });
             }
 
@@ -588,6 +632,13 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
                 scheduleSave(user.id, user, requestRender);
                 renderUserCard(user, requestRender, updateCalendarVacations);
                 updateCalendarVacations();
+
+                logEvent({
+                    action: 'vacation.add',
+                    message: `Добавил отпуск с ${state.year}-01-01`,
+                    targetId: user.id,
+                    targetName: user.name
+                });
             });
         }
     }

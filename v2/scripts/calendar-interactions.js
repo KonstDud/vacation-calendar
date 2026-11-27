@@ -3,6 +3,7 @@
 import { state, stateEvents } from './state.js';
 import { setupUserCombobox, escapeHtml } from './user-combobox.js';
 import { isAdmin, canEditUser, getCurrentUserId } from './auth.js';
+import { logEvent } from './log.js';
 
 let selectionStart = null;
 
@@ -188,6 +189,15 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
                 await window.firestore.setDoc(docRef, dataToSave, { merge: true });
                 stateEvents.dispatchEvent(new Event('statechange'));
                 item.remove();
+
+                logEvent({
+                    action: 'vacation.remove',
+                    level: 'warn',
+                    message: `Удалил отпуск из календаря (${user.name})`,
+                    targetId: userId,
+                    targetName: user.name,
+                    details: { vacationId: vacId }
+                });
             } catch (error) {
                 console.error('Ошибка удаления:', error);
             }
@@ -258,6 +268,14 @@ function openCreateVacationPopup(startStr, endStr, startIdx, endIdx) {
 
             closePopup();
             stateEvents.dispatchEvent(new Event('statechange'));
+
+            logEvent({
+                action: 'vacation.add',
+                message: `Оформил отпуск ${startStr} — ${endStr} (${user.name})`,
+                targetId: userId,
+                targetName: user.name,
+                details: { startDate: startStr, endDate: endStr }
+            });
 
         } catch (error) {
             console.error('Ошибка сохранения:', error);
