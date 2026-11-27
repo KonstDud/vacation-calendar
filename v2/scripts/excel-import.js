@@ -5,7 +5,7 @@
 // сначала разбор и предпросмотр, потом применение с автоснимком.
 
 import { loadJSZip } from './excel.js';
-import { state } from './state.js';
+import { state, addGroup } from './state.js';
 import { fromTemplateDate, splitFullName } from './profile.js';
 
 const SHEET_PATH = 'xl/worksheets/sheet1.xml';
@@ -434,6 +434,8 @@ export function buildImportPlan(parsed, existingUsers) {
         const existing = matches[0] || null;
         const invalid = employee.vacations.filter(v => !v.startDate || !v.endDate || v.endDate < v.startDate);
         const sameName = existing && normalizeName(existing.name) === normalizeName(employee.fullName);
+        const groupName = resolveGroupName(employee.profile.position, employee.profile.division);
+        const baseNote = !existing ? 'новый сотрудник' : (sameName ? 'обновление' : `ФИО: «${existing.name}» → «${employee.fullName}»`);
 
         employees.push({
             fullName: employee.fullName,
@@ -445,12 +447,18 @@ export function buildImportPlan(parsed, existingUsers) {
             existingName: existing ? existing.name : '',
             isNew: !existing,
             invalidCount: invalid.length,
-            note: !existing ? 'новый сотрудник' : (sameName ? 'обновление' : `ФИО: «${existing.name}» → «${employee.fullName}»`)
+            groupName,
+            note: groupName ? `${baseNote} · группа: ${groupName}` : baseNote
         });
     });
 
     const vacationCount = employees.reduce((sum, item) => sum + item.vacations.length, 0);
     const filter = parsed.filter || { filters: [], unsupported: false };
+
+    // Каких групп ещё нет — их создадим при импорте
+    const knownGroups = new Set((state.groups || []).map(group => String(group.name || '').toLowerCase()));
+    const newGroups = [...new Set(employees.map(item => item.groupName).filter(Boolean))]
+        .filter(name => !knownGroups.has(name.toLowerCase()));
     const headerNames = parsed.headerNames || {};
     const filterNote = filter.filters.length > 0
         ? 'Загружаем только строки, отобранные фильтром в файле: ' + filter.filters
@@ -462,6 +470,7 @@ export function buildImportPlan(parsed, existingUsers) {
         employees,
         skipped,
         filterNote,
+        newGroups,
         stats: {
             rows: parsed.rowsWithData || 0,
             employees: employees.length,
@@ -469,9 +478,35 @@ export function buildImportPlan(parsed, existingUsers) {
             existingCount: employees.filter(item => !item.isNew).length,
             vacations: vacationCount,
             invalid: employees.reduce((sum, item) => sum + item.invalidCount, 0),
+            groups: newGroups.length,
             skipped: skipped.length
         }
     };
+}
+
+// --- должность → группа ---
+
+// Порядок правил важен: «инженер-тестировщик» должен попасть к тестировщикам,
+// а не к инженерам, поэтому проверяем от более specific к общему.
+const GROUP_RULES = [
+    { keywords: ['тестиров', 'qa'], group: 'Тестировщики' },
+    { keywords: ['аналит'], group: 'Аналитики' },
+    { keywords: ['программист', 'разработ'], group: 'Разработчики' },
+    { keywords: ['дизайн'], group: 'Дизайнеры' },
+    { keywords: ['инженер'], group: 'Инженеры' }
+];
+
+function matchGroupRule(text) {
+    const source = String(text || '').toLowerCase();
+    if (!source) return '';
+
+    const rule = GROUP_RULES.find(item => item.keywords.some(keyword => source.includes(keyword)));
+    return rule ? rule.group : '';
+}
+
+// Сначала пробуем по должности, и только если не поняли — по отделу
+export function resolveGroupName(position, division) {
+    return matchGroupRule(position) || matchGroupRule(division);
 }
 
 // --- применение ---
@@ -544,11 +579,36 @@ function pickImportColor(usedColors) {
  * Импортированные сотрудники идут по алфавиту.
  */
 export async function applyImportPlan(plan, { onProgress } = {}) {
-    const results = { created: 0, updated: 0, vacations: 0, profiles: 0 };
+    const results = { created: 0, updated: 0, vacations: 0, profiles: 0, groupsCreated: 0, groupNames: [] };
 
     const usedColors = (state.users || []).map(user => user.color).filter(Boolean);
     const employees = (plan.employees || []).slice()
         .sort((a, b) => String(a.fullName).localeCompare(String(b.fullName), 'ru'));
+
+    // Группы: находим существующую по имени или создаём новую
+    const groupByName = new Map((state.groups || []).map(group => [String(group.name || '').toLowerCase(), group]));
+    const groupColors = (state.groups || []).map(group => group.color).filter(Boolean);
+    const createdGroups = [];
+
+    const groupIdFor = async (name) => {
+        if (!name) return '';
+
+        const found = groupByName.get(name.toLowerCase());
+        if (found) return found.id;
+
+        const color = pickImportColor(groupColors);
+        groupColors.push(color);
+
+        const id = await addGroup(name, color, false);
+        if (!id) return '';
+
+        const created = { id, name, color, order: Date.now() };
+        groupByName.set(name.toLowerCase(), created);
+        state.groups = [...state.groups, created];
+        createdGroups.push(created);
+
+        return id;
+    };
 
     // Импортированные ставим отдельным алфавитным блоком
     const baseOrder = 1000000;
@@ -557,6 +617,7 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
         const item = employees[index];
         const existing = item.existingId ? state.users.find(user => user.id === item.existingId) : null;
         const order = baseOrder + index * 10;
+        const targetGroupId = await groupIdFor(item.groupName);
 
         const profile = { ...((existing && existing.profile) || {}), ...item.profile };
         const vacations = (item.vacations || []).map((vacation, vacationIndex) => ({
@@ -567,12 +628,16 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
 
         if (existing) {
             const docRef = window.firestore.doc(window.db, 'vacationData_v2', String(state.year), 'users', existing.id);
-            await window.firestore.setDoc(docRef, { name: item.fullName, profile, vacations, order }, { merge: true });
+            const payload = { name: item.fullName, profile, vacations, order };
+            if (targetGroupId) payload.groupId = targetGroupId;
+
+            await window.firestore.setDoc(docRef, payload, { merge: true });
 
             existing.name = item.fullName;
             existing.profile = profile;
             existing.vacations = vacations;
             existing.order = order;
+            if (targetGroupId) existing.groupId = targetGroupId;
             results.updated += 1;
         } else {
             const collectionRef = window.firestore.collection(window.db, 'vacationData_v2', String(state.year), 'users');
@@ -588,7 +653,7 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
                 order,
                 isHidden: false,
                 isVisible: true,
-                groupId: '',
+                groupId: targetGroupId || '',
                 profile
             };
 
@@ -602,6 +667,9 @@ export async function applyImportPlan(plan, { onProgress } = {}) {
 
         if (onProgress) onProgress(index + 1, employees.length);
     }
+
+    results.groupsCreated = createdGroups.length;
+    results.groupNames = createdGroups.map(group => group.name);
 
     return results;
 }

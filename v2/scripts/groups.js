@@ -3,7 +3,7 @@ import { state, stateEvents, addGroup, updateGroup, deleteGroup } from './state.
 import { getIconEdit, getIconTrash } from './utils.js';
 import { isAdmin } from './auth.js';
 import { logEvent } from './log.js';
-import { isGroupHidden, setGroupHidden, isGroupCollapsed, setGroupCollapsed } from './view-prefs.js';
+import { isGroupHidden, setGroupHidden, isGroupCollapsed, setGroupCollapsed, getOverlapScope, setOverlapScope } from './view-prefs.js';
 
 export function initGroupsUI() {
     const popup = document.getElementById('groups-popup');
@@ -119,10 +119,28 @@ export function initGroupsUI() {
 
         const hint = document.createElement('div');
         hint.className = 'groups-hint';
-        hint.textContent = admin
+        hint.textContent = (admin
             ? 'Личные настройки: показывать группу на календаре и сворачивать карточки. Управление группами — тоже здесь.'
-            : 'Ваши личные настройки: показывать ли группу на календаре и сворачивать ли карточки.';
+            : 'Ваши личные настройки: показывать ли группу на календаре и сворачивать ли карточки.')
+            + ' Alt + клик по глазу сотрудника — оставить в группе только его.';
         content.appendChild(hint);
+
+        // Личная настройка: какие пересечения показывать
+        const scopeRow = document.createElement('label');
+        scopeRow.className = 'groups-setting';
+        scopeRow.innerHTML = '<span>Пересечения отпусков показывать</span>'
+            + '<select class="year-select" id="overlap-scope">'
+            + '<option value="group">только внутри группы</option>'
+            + '<option value="all">со всеми сотрудниками</option>'
+            + '</select>';
+        content.appendChild(scopeRow);
+
+        const scopeSelect = scopeRow.querySelector('#overlap-scope');
+        scopeSelect.value = getOverlapScope();
+        scopeSelect.addEventListener('change', (event) => {
+            setOverlapScope(event.target.value);
+            stateEvents.dispatchEvent(new Event('statechange'));
+        });
 
         // «Без группы» не показываем — ей нельзя управлять
         const visibleGroups = state.groups.filter(g => g.id !== 'ungrouped');

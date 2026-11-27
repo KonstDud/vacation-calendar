@@ -19,13 +19,17 @@ function read() {
             hiddenUsers: Array.isArray(data.hiddenUsers) ? data.hiddenUsers : [],
             hiddenGroups: Array.isArray(data.hiddenGroups) ? data.hiddenGroups : [],
             collapsedGroups: Array.isArray(data.collapsedGroups) ? data.collapsedGroups : [],
+            overlapScope: data.overlapScope === 'all' ? 'all' : 'group',
             orders: {
                 users: Array.isArray(orders.users) ? orders.users : [],
                 groups: Array.isArray(orders.groups) ? orders.groups : []
             }
         };
     } catch (error) {
-        return { hiddenUsers: [], hiddenGroups: [], collapsedGroups: [], orders: { users: [], groups: [] } };
+        return {
+            hiddenUsers: [], hiddenGroups: [], collapsedGroups: [], overlapScope: 'group',
+            orders: { users: [], groups: [] }
+        };
     }
 }
 
@@ -58,6 +62,16 @@ export function toggleUserHidden(userId) {
 }
 
 // Возвращает новое состояние: true — группа скрыта
+// Явно показать/скрыть сотрудника — нужно для «оставить в группе только его»
+export function setUserHidden(userId, hidden) {
+    const view = read();
+    view.hiddenUsers = hidden
+        ? (view.hiddenUsers.includes(userId) ? view.hiddenUsers : [...view.hiddenUsers, userId])
+        : view.hiddenUsers.filter(id => id !== userId);
+    write(view);
+    return view.hiddenUsers.includes(userId);
+}
+
 export function toggleGroupHidden(groupId) {
     return setGroupHidden(groupId, !isGroupHidden(groupId));
 }
@@ -97,6 +111,21 @@ export function clearViewPrefs() {
     } catch (error) {
         console.warn('[view-prefs] Не удалось очистить настройки отображения', error);
     }
+}
+
+// --- какие пересечения показывать: со всеми или только внутри своей группы ---
+
+// 'group' — меньше шума (по умолчанию), 'all' — все пересечения по году
+export function getOverlapScope() {
+    const value = read().overlapScope;
+    return value === 'all' ? 'all' : 'group';
+}
+
+export function setOverlapScope(scope) {
+    const view = read();
+    view.overlapScope = scope === 'all' ? 'all' : 'group';
+    write(view);
+    return view.overlapScope;
 }
 
 // --- личный порядок карточек и групп ---

@@ -813,6 +813,17 @@
     border-color: var(--accent-blue);
 }
 
+/* Файл перетаскивают в область */
+.import-file_dragover {
+    border-color: var(--accent-green);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.import-file__name_ready {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
 .import-file input {
     color: var(--text-secondary);
     font-family: inherit;

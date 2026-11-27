@@ -207,9 +207,9 @@
             <h2 class="popup__title">Загрузка из Excel</h2>
             <div class="popup__content">
                 <div id="import-step-file">
-                    <label class="import-file">
+                    <label class="import-file" id="import-file-zone">
                         <input type="file" id="import-file" accept=".xlsx" />
-                        <span class="import-file__name" id="import-file-name">Выберите файл .xlsx</span>
+                        <span class="import-file__name" id="import-file-name">Перетащите файл сюда или выберите на диске</span>
                     </label>
                     <p class="import-hint">Выберите файл графика в Excel (.xlsx). Перед загрузкой мы покажем,
                         кого нашли в файле и что изменится, — в базу данные попадут только после кнопки «Применить».</p>
@@ -238,8 +238,9 @@
             <div class="popup__actions">
                 <button type="button" class="btn btn_small" id="import-back" hidden>Назад</button>
                 <button type="button" class="btn btn_small" id="import-cancel">Отмена</button>
-                <button type="button" class="btn btn_add" id="import-parse">Разобрать</button>
+                <button type="button" class="btn btn_add" id="import-parse" disabled>Разобрать</button>
                 <button type="button" class="btn btn_add" id="import-apply" hidden>Применить</button>
+                <button type="button" class="btn btn_add" id="import-done-ok" hidden>Готово</button>
             </div>
             <button type="button" class="popup__close-button" id="import-close-x" aria-label="Закрыть"
                 title="Закрыть"></button>

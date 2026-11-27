@@ -260,6 +260,25 @@
     border: 1px solid var(--border-color);
 }
 
+/* Личные настройки в окне групп */
+.groups-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-main);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.groups-setting .year-select {
+    font-size: 12px;
+    padding: 5px 26px 5px 8px;
+}
+
 /* Стили для иконок (максимально компактные) */
 .btn_icon {
     background: transparent;

@@ -15,6 +15,22 @@ const escapeHtml = (value) => String(value === undefined || value === null ? '' 
     .replace(/"/g, '&quot;');
 
 let plan = null;
+let selectedFile = null;
+
+function setSelectedFile(file) {
+    selectedFile = file || null;
+
+    const nameNode = el('import-file-name');
+    if (nameNode) {
+        nameNode.textContent = selectedFile
+            ? `${selectedFile.name} (${Math.max(1, Math.round(selectedFile.size / 1024))} КБ)`
+            : 'Перетащите файл сюда или выберите на диске';
+        nameNode.classList.toggle('import-file__name_ready', !!selectedFile);
+    }
+
+    const parseButton = el('import-parse');
+    if (parseButton) parseButton.disabled = !selectedFile;
+}
 
 function showStep(step) {
     ['file', 'preview', 'done'].forEach(name => {
@@ -25,11 +41,16 @@ function showStep(step) {
     el('import-back').hidden = step !== 'preview';
     el('import-parse').hidden = step !== 'file';
     el('import-apply').hidden = step !== 'preview';
+
+    // На итоговом шаге вместо «Отмены» — понятная кнопка «Готово»
+    el('import-cancel').hidden = step === 'done';
+    el('import-done-ok').hidden = step !== 'done';
 }
 
 export function openImportDialog() {
     plan = null;
     el('import-file').value = '';
+    setSelectedFile(null);
     el('import-summary').textContent = '';
     el('import-table').innerHTML = '';
     el('import-skipped').innerHTML = '';
@@ -43,9 +64,11 @@ export function closeImportDialog() {
 }
 
 async function parseSelectedFile() {
-    const file = (el('import-file').files || [])[0];
+    const input = el('import-file');
+    const file = selectedFile || (input.files || [])[0];
+
     if (!file) {
-        showNoticeLong('Сначала выберите файл .xlsx');
+        showNoticeLong('Сначала выберите или перетащите файл .xlsx');
         return;
     }
 
@@ -74,6 +97,9 @@ function renderPreview(fileName) {
         + `Строк с данными: <b>${stats.rows}</b> · сотрудников: <b>${stats.employees}</b> `
         + `(новых <b>${stats.newCount}</b>, обновляем <b>${stats.existingCount}</b>) · периодов отпусков: <b>${stats.vacations}</b>`
         + (plan.filterNote ? `<br><span class="import-note-line">${escapeHtml(plan.filterNote)}</span>` : '')
+        + (plan.newGroups && plan.newGroups.length
+            ? `<br><span class="import-note-line">Создадим группы: ${escapeHtml(plan.newGroups.join(', '))}</span>`
+            : '')
         + (stats.skipped > 0 ? `<br><span class="import-warn">Пропущено строк: ${stats.skipped}</span>` : '')
         + (stats.invalid > 0 ? `<br><span class="import-warn">Периодов с ошибкой в датах: ${stats.invalid} — импортируем как есть</span>` : '');
 
@@ -152,6 +178,7 @@ async function runImport() {
                 <div class="import-done__row">Создано сотрудников: <b>${results.created}</b></div>
                 <div class="import-done__row">Обновлено сотрудников: <b>${results.updated}</b></div>
                 <div class="import-done__row">Записано периодов: <b>${results.vacations}</b></div>
+                ${results.groupsCreated > 0 ? `<div class="import-done__row">Создано групп: <b>${results.groupsCreated}</b> (${escapeHtml((results.groupNames || []).join(', '))})</div>` : ''}
                 ${skippedLine}
                 ${snapshotId ? '<div class="import-note">Резервная копия сохранена в базе</div>' : ''}
             </div>
@@ -181,6 +208,7 @@ export function initImportDialog() {
 
     openButton.addEventListener('click', openImportDialog);
     el('import-cancel').addEventListener('click', closeImportDialog);
+    el('import-done-ok').addEventListener('click', closeImportDialog);
     el('import-close-x').addEventListener('click', closeImportDialog);
     popup.addEventListener('mousedown', (event) => {
         if (event.target === popup) closeImportDialog();
@@ -190,8 +218,40 @@ export function initImportDialog() {
     el('import-apply').addEventListener('click', runImport);
     el('import-back').addEventListener('click', backToFile);
 
-    el('import-file').addEventListener('change', () => {
-        const file = (el('import-file').files || [])[0];
-        el('import-file-name').textContent = file ? file.name : 'Файл не выбран';
-    });
+    // --- выбор файла и перетаскивание в область ---
+    const fileInput = el('import-file');
+    const dropZone = el('import-file-zone');
+
+    fileInput.addEventListener('change', () => setSelectedFile((fileInput.files || [])[0]));
+
+    if (dropZone) {
+        ['dragenter', 'dragover'].forEach(type => {
+            dropZone.addEventListener(type, (event) => {
+                event.preventDefault();
+                dropZone.classList.add('import-file_dragover');
+            });
+        });
+
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('import-file_dragover'));
+
+        dropZone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dropZone.classList.remove('import-file_dragover');
+
+            const files = event.dataTransfer ? event.dataTransfer.files : null;
+            const file = files && files.length > 0 ? files[0] : null;
+            if (!file) return;
+
+            // показываем файл и в самом поле ввода
+            try {
+                const transfer = new DataTransfer();
+                transfer.items.add(file);
+                fileInput.files = transfer.files;
+            } catch (error) {
+                console.warn('[import] поле не приняло файл, работаем с перетащенным', error);
+            }
+
+            setSelectedFile(file);
+        });
+    }
 }

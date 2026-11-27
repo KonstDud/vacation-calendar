@@ -3,7 +3,7 @@ import { state, discardPendingRemote } from './state.js';
 import { getCalendarDays, getWorkingDays, validateInternalOverlap, getExternalOverlaps, getIconEye, getIconEyeOff, getIconWarning, getIconDrag, getIconProfile, countDaysFromYearStart } from './utils.js';
 import { highlightUserVacations, clearUserVacationHighlight, highlightVacationPeriod, clearVacationPeriodHighlight, getHighlightedVacationId, scrollToVacationPeriod, isUserShownOnCalendar } from './calendar-grid.js';
 import { canEditUser, canManageUsers } from './auth.js';
-import { isUserHidden, isGroupHidden, toggleUserHidden } from './view-prefs.js';
+import { isUserHidden, isGroupHidden, toggleUserHidden, setUserHidden, getOverlapScope } from './view-prefs.js';
 import { openProfileModal } from './profile-modal.js';
 import { updateUserChip } from './user-chip.js';
 import { getProfile, getEntitlement, isParentalLeave, formatOverDays, formatShortDays, composeShortName } from './profile.js';
@@ -158,6 +158,14 @@ function toggleVacationHighlight(user, vac) {
     markActiveVacation();
 }
 
+// С кем сравниваем пересечения: со всеми или только внутри своей группы
+function overlapCandidates(user) {
+    if (getOverlapScope() !== 'group') return state.users;
+
+    const groupId = user.groupId || '';
+    return (state.users || []).filter(other => (other.groupId || '') === groupId);
+}
+
 // Проблемы карточки: невалидные периоды и пересечения.
 // Считаем всегда при отрисовке — иначе после сворачивания/обновления страницы
 // ошибки «терялись» и невалидные периоды оставались незамеченными.
@@ -177,7 +185,7 @@ function collectUserProblems(user) {
         if (isInvalid) invalid.push(vac);
         if (isOverlap) overlaps.push(vac);
 
-        const externalNames = getExternalOverlaps(user, vac, state.users);
+        const externalNames = getExternalOverlaps(user, vac, overlapCandidates(user));
         if (externalNames.length > 0 && !external.some(item => item.vacId === vac.id)) {
             external.push({ vacId: vac.id, names: externalNames.map(n => n.name).join(', ') });
         }
@@ -261,7 +269,7 @@ function renderVacationProblems(vacDiv, user, vac) {
         : { isOverlap: false, isInvalid: false };
 
     const datesInvalid = !hasDates || isInvalid;
-    const externalOverlaps = hasDates ? getExternalOverlaps(user, vac, state.users) : [];
+    const externalOverlaps = hasDates ? getExternalOverlaps(user, vac, overlapCandidates(user)) : [];
     const crossTitle = externalOverlaps.map(o => o.name).join(', ');
 
     vacDiv.classList.toggle('form__vacation_overlap', datesInvalid || isOverlap);
@@ -286,7 +294,12 @@ function renderVacationProblems(vacDiv, user, vac) {
     }
 
     if (externalOverlaps.length > 0) {
-        addAlert('form__vacation-cross-alert', `${getIconWarning()} Пересечение: ${crossTitle}`, crossTitle);
+        // Если пересечений много — не перечисляем всех, показываем количество
+        const label = externalOverlaps.length > 3
+            ? `Пересекается с ${externalOverlaps.length} сотрудниками`
+            : `Пересечение: ${crossTitle}`;
+
+        addAlert('form__vacation-cross-alert', `${getIconWarning()} ${label}`, crossTitle);
     }
 }
 
@@ -338,7 +351,7 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     const dragHandle = `<div class="form__drag-handle-user" title="Перетащите, чтобы изменить порядок">${getIconDrag()}</div>`;
 
     // «Глаз» доступен всем: это личный фильтр показа на календаре
-    const eyeButton = `<button type="button" class="btn_icon eye-btn ${eyeClass}" title="${eyeTitle}">
+    const eyeButton = `<button type="button" class="btn_icon eye-btn ${eyeClass}" title="${eyeTitle} · Alt+клик — оставить только его">
                 ${eyeIcon}
             </button>`;
 
@@ -406,6 +419,18 @@ export function renderUserCard(user, requestRender, updateCalendarVacations) {
     if (eyeBtn) {
         eyeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+
+            // Alt+клик — оставить в этой группе видимым только его
+            if (e.altKey) {
+                const groupId = user.groupId || '';
+                state.users.forEach(other => {
+                    if ((other.groupId || '') !== groupId) return;
+                    setUserHidden(other.id, other.id !== user.id);
+                });
+                requestRender();
+                return;
+            }
+
             toggleUserHidden(user.id);
             renderUserCard(user, requestRender, updateCalendarVacations);
             updateCalendarVacations();
