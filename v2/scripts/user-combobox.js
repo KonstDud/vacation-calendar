@@ -122,7 +122,9 @@ export function setupUserCombobox(root, { getUsers, getGroups, onSelect } = {}) 
         if (!silent && onSelect) onSelect(user || null);
     };
 
-    input.addEventListener('focus', () => openList(false));
+    // Список открываем по клику (mousedown), а не по фокусу: иначе он
+    // раскрывается сам, когда поле получает фокус программно
+    input.addEventListener('mousedown', () => openList(false));
 
     input.addEventListener('input', () => {
         selectedId = '';

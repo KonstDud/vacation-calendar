@@ -13,7 +13,7 @@ import {
 import { setupUserCombobox, escapeHtml } from './user-combobox.js';
 import { createProfileForm } from './profile-form.js';
 import { loadDictionaries } from './dictionaries.js';
-import { getProfile, getEntitlement, isParentalLeave, sanitizeProfile, validateProfile, hasProfileErrors } from './profile.js';
+import { getProfile, getEntitlement, isParentalLeave, sanitizeProfile, validateProfile, hasProfileErrors, composeShortName } from './profile.js';
 import { collectPeopleFromNearbyYears } from './state.js';
 import { logEvent } from './log.js';
 
@@ -74,7 +74,9 @@ function showLastUser() {
         return;
     }
 
-    el('login-last-name').textContent = found.name;
+    // В кнопке — короткое «Фамилия Имя», полное ФИО в подсказке
+    el('login-last-name').textContent = composeShortName(getProfile(found), found.name);
+    el('login-last-btn').title = found.name;
     el('login-last').hidden = false;
     el('login-who').hidden = true;
 }

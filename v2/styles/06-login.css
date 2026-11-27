@@ -139,3 +139,25 @@ select.login__input {
 .login__link:hover {
     color: var(--text-primary);
 }
+
+/* Кнопка «Продолжить как …»: подпись сверху, имя снизу — не сливается */
+.login__resume {
+    flex-direction: column;
+    height: auto;
+    gap: 2px;
+    padding: 8px 12px;
+    line-height: 1.25;
+    text-align: center;
+}
+
+.login__resume-label {
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.85;
+}
+
+.login__resume-name {
+    font-size: 14px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
