@@ -253,8 +253,62 @@ function exportLogs() {
     downloadLogs(items, state.year, el('journal-format').value);
 }
 
+// Все записи года страницами — для архивации
+async function loadAllItems(maxItems = 2000) {
+    const items = [];
+    let pageCursor = null;
+    let guard = 0;
+
+    while (guard < 40 && items.length < maxItems) {
+        const page = await fetchLogPage({ cursor: pageCursor, pageSize: PAGE_SIZE });
+        items.push(...page.items);
+        pageCursor = page.cursor;
+        guard += 1;
+        if (page.done) break;
+    }
+
+    return items;
+}
+
+// Архивируем: сначала собираем все записи года и отдаём файл, затем чистим журнал
+async function archiveAndClear() {
+    if (!confirm('Собрать все записи года в файл и очистить журнал? Действие необратимо.')) return;
+
+    try {
+        const items = await loadAllItems();
+
+        if (items.length === 0) {
+            showNoticeLong('В журнале нет записей для архивации');
+            return;
+        }
+
+        downloadLogs(items, state.year, el('journal-format').value);
+        const removed = await clearLogs(state.year);
+
+        // След о самой архивации остаётся в чистом журнале
+        logEvent({
+            action: 'data.logs_archive',
+            level: 'warn',
+            message: `Архивировал журнал: выгружено записей ${items.length}, очищено ${removed}`,
+            details: { downloaded: items.length, removed, format: el('journal-format').value }
+        });
+
+        showNoticeLong(`Архив выгружен (записей ${items.length}), журнал очищен`);
+        await reload();
+    } catch (error) {
+        console.error('[journal] не удалось архивировать журнал:', error);
+        showNoticeLong(`Не удалось архивировать: ${error.message}`);
+    }
+}
+
 async function cleanLogs(scope) {
     if (!scope) return;
+
+    if (scope === 'archive') {
+        await archiveAndClear();
+        el('journal-clean-scope').value = '';
+        return;
+    }
 
     const label = scope === 'all' ? 'все записи за год' : `записи старше ${scope} дней`;
     if (!confirm(`Удалить ${label}? Действие необратимо.`)) {

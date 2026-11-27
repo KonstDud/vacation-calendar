@@ -97,6 +97,8 @@
                 <div id="users-container"></div>
 
                 <div class="side-footer">
+                    <!-- Временно скрыта: парсер xlsx доводится (см. отчёт) -->
+                    <button type="button" class="btn_small" id="btn-import" hidden>Загрузить из Excel</button>
                     <button type="button" class="btn_small" id="btn-export-excel">Выгрузить в Excel</button>
                     <button type="button" class="btn_link" id="btn-reset">Сбросить всё</button>
                 </div>
@@ -200,6 +202,52 @@
         </div>
     </div>
 
+    <!-- Попап загрузки из Excel (только администратор) -->
+    <div class="popup" id="import-popup">
+        <div class="popup__container popup__container_import">
+            <h2 class="popup__title">Загрузка из Excel</h2>
+            <div class="popup__content">
+                <div id="import-step-file">
+                    <label class="import-file">
+                        <input type="file" id="import-file" accept=".xlsx" />
+                        <span class="import-file__name" id="import-file-name">Выберите файл .xlsx</span>
+                    </label>
+                    <p class="import-hint">Подходит тот же шаблон (колонки A–Q, данные с 4-й строки):
+                        и ваш исходный файл, и наша выгрузка. Пока не нажмёте «Применить»,
+                        в базе ничего не меняется.</p>
+                </div>
+
+                <div id="import-step-preview" hidden>
+                    <div class="import-summary" id="import-summary"></div>
+
+                    <div class="import-options">
+                        <label class="export-choice">
+                            <input type="checkbox" id="import-snapshot" checked /> Сделать резервную копию перед записью
+                        </label>
+                        <label class="export-choice">
+                            <input type="checkbox" id="import-download" checked /> Скачать копию на компьютер (JSON)
+                        </label>
+                    </div>
+
+                    <div class="import-table-wrap" id="import-table"></div>
+                    <div class="import-skipped" id="import-skipped"></div>
+                </div>
+
+                <div id="import-step-done" hidden>
+                    <div id="import-result"></div>
+                </div>
+            </div>
+            <div class="popup__actions">
+                <button type="button" class="btn btn_small" id="import-back" hidden>Назад</button>
+                <button type="button" class="btn btn_small" id="import-cancel">Отмена</button>
+                <button type="button" class="btn btn_add" id="import-parse">Разобрать</button>
+                <button type="button" class="btn btn_add" id="import-apply" hidden>Применить</button>
+            </div>
+            <button type="button" class="popup__close-button" id="import-close-x" aria-label="Закрыть"
+                title="Закрыть"></button>
+        </div>
+    </div>
+
     <!-- Плавающее окно журнала действий (только администратор) -->
     <div class="journal-window" id="journal-popup" hidden>
         <div class="journal-window__bar" id="journal-drag">
@@ -226,8 +274,9 @@
             <div class="journal-footer">
                 <span class="journal-status" id="journal-status"></span>
                 <div class="journal-actions">
-                    <select class="year-select" id="journal-clean-scope" title="Очистка журнала">
+                    <select class="year-select" id="journal-clean-scope" title="Очистка и архив журнала">
                         <option value="">Очистить…</option>
+                        <option value="archive">Выгрузить и очистить год</option>
                         <option value="90">Старше 90 дней</option>
                         <option value="30">Старше 30 дней</option>
                         <option value="all">Все записи за год</option>

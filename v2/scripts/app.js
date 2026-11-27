@@ -16,6 +16,7 @@ import { MONTH_NAMES, getViewMonth, setViewMonth, filterUsersByViewMonth, getCal
 import { initExportDialog, openExportDialog } from './export-dialog.js';
 import { initJournal } from './journal-window.js';
 import { initResetDialog } from './reset-dialog.js';
+import { initImportDialog } from './import-dialog.js';
 import { logEvent, schedulePrune } from './log.js';
 
 const usersContainer = document.getElementById('users-container');
@@ -529,6 +530,10 @@ function applyAccessRules() {
     // Журнал действий — тоже только администратор
     const journalButton = document.getElementById('btn-journal');
     if (journalButton) journalButton.style.display = 'none';
+
+    // Загрузка из Excel — только администратор
+    const importButton = document.getElementById('btn-import');
+    if (importButton) importButton.style.display = 'none';
 }
 
 applyAccessRules();
@@ -542,6 +547,7 @@ if (isAuthenticated()) {
         initExportDialog();
         initJournal();
         initResetDialog();
+        initImportDialog();
         initCalendarInteractions();
         initState();
     });
