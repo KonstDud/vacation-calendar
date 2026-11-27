@@ -32,16 +32,23 @@ export function getViewMonthName() {
     return viewMonth === null ? '' : MONTH_NAMES[viewMonth];
 }
 
+// Дата в формате ISO: '2027-02-28'. Сравниваем строки, а не Date —
+// иначе получаем сдвиг из-за разницы UTC и локального времени.
+function isoDate(year, month, day) {
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export function monthBounds(year, month) {
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return { start: isoDate(year, month, 1), end: isoDate(year, month, lastDay) };
+}
+
 // Пересекается ли отпуск с указанным месяцем
 export function vacationTouchesMonth(vac, year, month) {
     if (!vac || !vac.startDate || !vac.endDate || vac.endDate < vac.startDate) return false;
 
-    const start = new Date(vac.startDate);
-    const end = new Date(vac.endDate);
-    const monthStart = new Date(year, month, 1);
-    const monthEnd = new Date(year, month + 1, 0);
-
-    return start <= monthEnd && end >= monthStart;
+    const { start, end } = monthBounds(year, month);
+    return vac.startDate <= end && vac.endDate >= start;
 }
 
 export function userHasVacationInMonth(user, year, month) {
@@ -65,14 +72,15 @@ export function getCalendarMonthRange(users) {
     if (viewMonth === null) return { from: 0, to: 11 };
 
     const year = state.year;
-    const monthStart = new Date(year, viewMonth, 1);
-    const monthEnd = new Date(year, viewMonth + 1, 0);
+    const bounds = monthBounds(year, viewMonth);
 
+    // Отпуск начинается в прошлом месяце и тянется в выбранный
     const spillsFromPrev = (users || []).some(user => (user.vacations || []).some(vac =>
-        vacationTouchesMonth(vac, year, viewMonth) && new Date(vac.startDate) < monthStart));
+        vacationTouchesMonth(vac, year, viewMonth) && vac.startDate < bounds.start));
 
+    // Отпуск заканчивается уже в следующем месяце
     const spillsToNext = (users || []).some(user => (user.vacations || []).some(vac =>
-        vacationTouchesMonth(vac, year, viewMonth) && new Date(vac.endDate) > monthEnd));
+        vacationTouchesMonth(vac, year, viewMonth) && vac.endDate > bounds.end));
 
     return {
         from: spillsFromPrev && viewMonth > 0 ? viewMonth - 1 : viewMonth,

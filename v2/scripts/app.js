@@ -12,7 +12,7 @@ import { isGroupHidden, toggleGroupHidden, isGroupCollapsed, setGroupCollapsed, 
 import { initProfileModal, openProfileModal } from './profile-modal.js';
 import { updateUserChip, initUserChip } from './user-chip.js';
 import { showNotice } from './notice.js';
-import { MONTH_NAMES, getViewMonth, setViewMonth, filterUsersByViewMonth, getCalendarMonthRange } from './view-month.js';
+import { MONTH_NAMES, getViewMonth, setViewMonth, filterUsersByViewMonth, getCalendarMonthRange, isViewMonthActive } from './view-month.js';
 import { initExportDialog, openExportDialog } from './export-dialog.js';
 
 const usersContainer = document.getElementById('users-container');
@@ -62,6 +62,7 @@ function requestRender() {
     usersContainer.replaceChildren();
 
     // При активном фильтре по месяцу показываем только тех, у кого отпуск в этом месяце
+    const filterActive = isViewMonthActive();
     const visibleUsers = filterUsersByViewMonth(state.users);
 
     const groupedUsers = {}; const ungroupedUsers = [];
@@ -87,7 +88,13 @@ function requestRender() {
             u => u.order
         );
 
-        if (usersInGroup.length === 0 && !group.showIfEmpty && !isUngrouped) return;
+        // Пустые группы при активном фильтре не показываем:
+        // они пусты из-за фильтра, а не сами по себе
+        if (filterActive) {
+            if (usersInGroup.length === 0) return;
+        } else if (usersInGroup.length === 0 && !group.showIfEmpty && !isUngrouped) {
+            return;
+        }
 
         const groupBlock = document.createElement('div');
         groupBlock.className = 'group-block';
@@ -340,20 +347,31 @@ function renderCalendarForView() {
 function updateViewBanner() {
     const banner = document.getElementById('view-banner');
     const text = document.getElementById('view-banner-text');
-    if (!banner || !text) return;
+    const chip = document.getElementById('side-filter');
+    const chipText = document.getElementById('side-filter-text');
 
     const month = getViewMonth();
+    const shown = month === null ? state.users.length : filterUsersByViewMonth(state.users).length;
 
     if (month === null) {
-        banner.hidden = true;
+        if (banner) banner.hidden = true;
+        if (chip) chip.hidden = true;
         if (viewMonthSelect) viewMonthSelect.classList.remove('year-select_view-active');
         return;
     }
 
-    const shown = filterUsersByViewMonth(state.users).length;
+    const monthName = MONTH_NAMES[month].toLowerCase();
 
-    banner.hidden = false;
-    text.textContent = `Показаны отпуска за ${MONTH_NAMES[month].toLowerCase()}: сотрудников ${shown} из ${state.users.length}`;
+    if (banner && text) {
+        banner.hidden = false;
+        text.textContent = `Показаны отпуска за ${monthName}: сотрудников ${shown} из ${state.users.length}`;
+    }
+
+    // Дублируем прямо над списком сотрудников — иначе фильтр легко не заметить
+    if (chip && chipText) {
+        chip.hidden = false;
+        chipText.textContent = `Фильтр: ${monthName} · ${shown} из ${state.users.length}`;
+    }
 
     if (viewMonthSelect) {
         viewMonthSelect.value = String(month);
@@ -364,6 +382,11 @@ function updateViewBanner() {
 const viewBannerReset = document.getElementById('view-banner-reset');
 if (viewBannerReset) {
     viewBannerReset.addEventListener('click', () => setViewMonth(null));
+}
+
+const sideFilterReset = document.getElementById('side-filter-reset');
+if (sideFilterReset) {
+    sideFilterReset.addEventListener('click', () => setViewMonth(null));
 }
 
 stateEvents.addEventListener('viewfilterchange', () => {

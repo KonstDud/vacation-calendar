@@ -253,6 +253,13 @@
     border: 1px solid rgba(59, 130, 246, 0.4);
 }
 
+/* Отпуска ещё не запланированы — спокойный серый значок */
+.form__balance_none {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+}
+
 /* Стили для иконок (максимально компактные) */
 .btn_icon {
     background: transparent;

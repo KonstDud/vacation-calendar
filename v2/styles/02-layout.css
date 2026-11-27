@@ -211,16 +211,53 @@
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 12px;
-    padding: 8px 14px;
+    padding: 9px 14px;
     border-radius: 10px;
-    background: rgba(59, 130, 246, 0.12);
-    border: 1px solid rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.16);
+    border: 1px solid rgba(59, 130, 246, 0.42);
+    border-left: 3px solid var(--accent-blue);
     font-size: 13px;
+    font-weight: 500;
     color: var(--text-primary);
 }
 
 .view-banner[hidden] {
     display: none;
+}
+
+/* Плашка активного фильтра прямо над списком сотрудников */
+.side-filter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.16);
+    border: 1px solid rgba(59, 130, 246, 0.42);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.side-filter[hidden] {
+    display: none;
+}
+
+.side-filter__reset {
+    background: transparent;
+    border: none;
+    color: #60a5fa;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+}
+
+.side-filter__reset:hover {
+    color: #93c5fd;
 }
 
 .view-banner__reset {

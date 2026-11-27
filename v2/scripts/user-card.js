@@ -213,13 +213,15 @@ function getBalance(user) {
 
     const vacations = (user.vacations || [])
         .filter(vac => vac.startDate && vac.endDate && vac.endDate >= vac.startDate);
-    if (vacations.length === 0) return null;
 
     const total = vacations.reduce((sum, vac) => sum + getCalendarDays(vac.startDate, vac.endDate), 0);
     const diff = total - entitlement;
 
+    // Отпуска ещё не планировали — отдельное спокойное состояние
+    if (vacations.length === 0) return { diff, entitlement, total, noPlan: true };
+
     if (diff === 0) return null;
-    return { diff, entitlement, total };
+    return { diff, entitlement, total, noPlan: false };
 }
 
 function updateBalanceBadge(node, balance) {
@@ -229,7 +231,7 @@ function updateBalanceBadge(node, balance) {
         node.hidden = true;
         node.textContent = '';
         node.title = '';
-        node.classList.remove('form__balance_over', 'form__balance_short');
+        node.classList.remove('form__balance_over', 'form__balance_short', 'form__balance_none');
         return;
     }
 
@@ -237,10 +239,17 @@ function updateBalanceBadge(node, balance) {
 
     node.hidden = false;
     node.textContent = over ? `+${balance.diff}` : `−${Math.abs(balance.diff)}`;
-    node.title = `${over ? 'Перебор' : 'Недобор'}: ${over ? formatOverDays(balance.diff) : formatShortDays(Math.abs(balance.diff))}. `
-        + `Норма ${balance.entitlement}, запланировано ${balance.total}.`;
-    node.classList.toggle('form__balance_over', over);
-    node.classList.toggle('form__balance_short', !over);
+
+    if (balance.noPlan) {
+        node.title = `Отпуска на ${state.year} год не запланированы. Норма ${balance.entitlement} календарных дней.`;
+    } else {
+        node.title = `${over ? 'Перебор' : 'Недобор'}: ${over ? formatOverDays(balance.diff) : formatShortDays(Math.abs(balance.diff))}. `
+            + `Норма ${balance.entitlement}, запланировано ${balance.total}.`;
+    }
+
+    node.classList.toggle('form__balance_over', !balance.noPlan && over);
+    node.classList.toggle('form__balance_short', !balance.noPlan && !over);
+    node.classList.toggle('form__balance_none', balance.noPlan);
 }
 
 // Предупреждения внутри блока отпуска
